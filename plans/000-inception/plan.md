@@ -53,12 +53,10 @@ CONTAINER_ID=""
 
 start_sandbox() {
     local image="arpi-sandbox"
-    local network_args=""
 
     # Use project-specific image if .arpi.Dockerfile exists
     if [[ -f "$PROJECT_ROOT/.arpi.Dockerfile" ]]; then
         image="arpi-project-$(basename "$PROJECT_ROOT")"
-        # Build if not cached (content-addressed via Dockerfile hash)
         local dockerfile_hash
         dockerfile_hash=$(sha256sum "$PROJECT_ROOT/.arpi.Dockerfile" | cut -c1-12)
         image="${image}:${dockerfile_hash}"
@@ -67,31 +65,41 @@ start_sandbox() {
         fi
     fi
 
-    # Network restriction if configured
-    if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]]; then
-        local network_mode
-        network_mode=$(jq -r '.network.mode // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
-        if [[ "$network_mode" == "restricted" ]]; then
-            ensure_restricted_network
-            network_args="--network=arpi-restricted"
-        fi
-    fi
-
     # Derive git identity from host
     local git_name git_email
     git_name=$(git config user.name 2>/dev/null || echo "arpi")
     git_email=$(git config user.email 2>/dev/null || echo "arpi@localhost")
 
-    # Collect extra env vars from config
+    # Collect extra env vars from config (validated names only)
     local env_args=""
     if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]]; then
-        local env_vars
-        env_vars=$(jq -r '.env[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
-        for var in $env_vars; do
-            if [[ -n "${!var:-}" ]]; then
-                env_args+=" -e ${var}"
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            if [[ ! "$var" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+                log_err "Invalid env var name in config: $var (skipping)"
+                continue
             fi
-        done
+            if [[ -n "${!var:-}" ]]; then
+                env_args+=" --env ${var}=${!var}"
+            fi
+        done < <(jq -r '.env[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
+    fi
+
+    # Network restriction via iptables entrypoint (see "Network restriction" section)
+    local cap_args=""
+    local entrypoint_args=""
+    if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]]; then
+        local network_mode
+        network_mode=$(jq -r '.network.mode // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
+        if [[ "$network_mode" == "restricted" ]]; then
+            local allowed_hosts
+            allowed_hosts=$(jq -r '.network.allowedHosts[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null | tr '\n' ' ')
+            local entrypoint_file="$PROJECT_ROOT/.arpi-entrypoint.sh"
+            generate_entrypoint "$allowed_hosts" > "$entrypoint_file"
+            chmod +x "$entrypoint_file"
+            cap_args="--cap-add=NET_ADMIN"
+            entrypoint_args="--entrypoint $entrypoint_file"
+        fi
     fi
 
     CONTAINER_ID=$(docker run -d \
@@ -104,9 +112,18 @@ start_sandbox() {
         -e "GIT_COMMITTER_NAME=$git_name" \
         -e "GIT_COMMITTER_EMAIL=$git_email" \
         $env_args \
-        $network_args \
+        $cap_args \
+        $entrypoint_args \
         "$image" \
         sleep infinity)
+
+    if [[ -z "$CONTAINER_ID" ]]; then
+        log_err "Failed to start sandbox container"
+        exit 1
+    fi
+
+    # Clean up generated entrypoint
+    [[ -f "$PROJECT_ROOT/.arpi-entrypoint.sh" ]] && rm -f "$PROJECT_ROOT/.arpi-entrypoint.sh"
 }
 
 stop_sandbox() {
@@ -222,12 +239,25 @@ New command. Interactive. Creates:
    ```json
    {
      "network": {
-       "mode": "default"
+       "mode": "default",
+       "allowedHosts": []
      },
      "env": []
    }
    ```
-   Developer can edit to add `"mode": "restricted"` with `"allowedHosts"`, extra env var names, etc.
+   To enable network restriction, change `"mode"` to `"restricted"` and add any hosts beyond `api.anthropic.com` (which is always allowed) to `allowedHosts`:
+   ```json
+   {
+     "network": {
+       "mode": "restricted",
+       "allowedHosts": [
+         "registry.npmjs.org",
+         "pypi.org"
+       ]
+     },
+     "env": ["NPM_TOKEN"]
+   }
+   ```
 
 3. **`.arpi.Dockerfile`** — Custom sandbox Dockerfile extending the base image. Created with a commented template:
    ```dockerfile
@@ -240,21 +270,112 @@ New command. Interactive. Creates:
 
 ### Network restriction (opt-in via config)
 
-When `.arpi.config.json` has `network.mode: "restricted"`:
+When `.arpi.config.json` has `network.mode: "restricted"`, arpi enforces egress filtering via iptables inside the container. The config specifies which hosts the container can reach:
 
-```bash
-ensure_restricted_network() {
-    if ! docker network inspect arpi-restricted &>/dev/null; then
-        docker network create arpi-restricted
-        # Note: actual egress filtering requires iptables rules
-        # in the container entrypoint or a sidecar proxy.
-        # For v1, the network creation is the foundation;
-        # egress rules are a follow-up hardening step.
-    fi
+```json
+{
+  "network": {
+    "mode": "restricted",
+    "allowedHosts": [
+      "registry.npmjs.org"
+    ]
+  }
 }
 ```
 
-Full iptables-based egress filtering (resolving `allowedHosts` to IPs, setting rules in an entrypoint script) is a follow-up. The v1 restricted network creates the Docker network isolation boundary; actual host-level filtering is deferred.
+`api.anthropic.com` is always allowed (Claude can't function without it) and does not need to be listed. Additional hosts (package registries, internal APIs, etc.) are added to `allowedHosts`.
+
+When mode is `"default"` or the config is absent, no network restriction is applied.
+
+**How it works:** arpi generates an entrypoint script at container startup that:
+1. Resolves each allowed domain to IP addresses via `getent hosts`
+2. Sets iptables rules: default DROP on OUTPUT, then ACCEPT for loopback, established connections, DNS (UDP/TCP 53 to Docker's DNS at 127.0.0.11), and TCP 443 to each resolved IP
+3. Execs into `sleep infinity` so the container stays alive for `docker exec`
+
+The container runs with `--cap-add=NET_ADMIN` when restricted mode is active. This grants iptables access within the container's own network namespace only — it does not grant host network access.
+
+```bash
+generate_entrypoint() {
+    local allowed_hosts="$1"  # space-separated list
+    local script="#!/bin/sh
+set -e
+
+# Resolve allowed hosts to IPs
+ALLOWED_IPS=''
+for host in api.anthropic.com $allowed_hosts; do
+    ips=\$(getent hosts \"\$host\" 2>/dev/null | awk '{print \$1}' || true)
+    ALLOWED_IPS=\"\$ALLOWED_IPS \$ips\"
+done
+
+# Default policy: drop all outbound
+iptables -P OUTPUT DROP
+
+# Allow loopback
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established/related (responses to allowed requests)
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow DNS to Docker's embedded DNS
+iptables -A OUTPUT -p udp -d 127.0.0.11 --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp -d 127.0.0.11 --dport 53 -j ACCEPT
+
+# Allow HTTPS to each resolved IP
+for ip in \$ALLOWED_IPS; do
+    iptables -A OUTPUT -p tcp -d \"\$ip\" --dport 443 -j ACCEPT
+done
+
+exec sleep infinity
+"
+    echo "$script"
+}
+
+start_sandbox() {
+    # ... (image selection, git identity, env vars as before) ...
+
+    local entrypoint_args=""
+    local cap_args=""
+
+    if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]]; then
+        local network_mode
+        network_mode=$(jq -r '.network.mode // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
+        if [[ "$network_mode" == "restricted" ]]; then
+            local allowed_hosts
+            allowed_hosts=$(jq -r '.network.allowedHosts[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null | tr '\n' ' ')
+
+            local entrypoint_file="$PROJECT_ROOT/.arpi-entrypoint.sh"
+            generate_entrypoint "$allowed_hosts" > "$entrypoint_file"
+            chmod +x "$entrypoint_file"
+
+            cap_args="--cap-add=NET_ADMIN"
+            entrypoint_args="--entrypoint $entrypoint_file"
+        fi
+    fi
+
+    CONTAINER_ID=$(docker run -d \
+        --name "arpi-$$" \
+        -v "$PROJECT_ROOT":"$PROJECT_ROOT" \
+        -w "$PROJECT_ROOT" \
+        -v "$HOME/.claude":"$HOME/.claude":ro \
+        -e "GIT_AUTHOR_NAME=$git_name" \
+        -e "GIT_AUTHOR_EMAIL=$git_email" \
+        -e "GIT_COMMITTER_NAME=$git_name" \
+        -e "GIT_COMMITTER_EMAIL=$git_email" \
+        $env_args \
+        $cap_args \
+        $entrypoint_args \
+        "$image" \
+        sleep infinity)
+
+    # Clean up the generated entrypoint file
+    [[ -f "$PROJECT_ROOT/.arpi-entrypoint.sh" ]] && rm -f "$PROJECT_ROOT/.arpi-entrypoint.sh"
+}
+```
+
+**Limitations (documented, not hidden):**
+- Domain-to-IP resolution happens at container startup. If a service's IPs change mid-run, the new IPs won't be allowed. This is acceptable for bounded-duration runs.
+- `--cap-add=NET_ADMIN` is required for iptables. This is scoped to the container's network namespace and does not affect the host.
+- Only port 443 (HTTPS) is allowed to resolved IPs. If a service uses a non-standard port, it won't be reachable. This is intentional — the allowlist is for HTTPS APIs, not arbitrary services.
 
 ### PROJECT_ROOT detection
 
