@@ -20,6 +20,10 @@ arpi's target user already runs `claude --dangerously-skip-permissions` because 
 - Optional `arpi init` for projects that want network restriction, custom runtimes, or a ARPI.md scaffold
 - Minimal changes to the existing script structure — same commands, same prompts, same output
 
+## Naming
+
+This plan uses `arpi` as the working name throughout — script, container names (`arpi-$$`), image names (`arpi-sandbox`), config files (`.arpi.config.json`), and the per-repo instructions file (`ARPI.md`). Decision-005 proposes renaming to `cook` (status: Proposed). If the rename is accepted before implementation, it is a mechanical find-replace across the plan and code — no architectural changes needed. The name appears in: the script filename, container name prefix, Docker image name, config file names, the per-repo instructions file, and documentation.
+
 ## Non-Goals
 
 - GUI or web interface
@@ -77,7 +81,14 @@ arpi starts a long-running container on first `run_claude()` call and tears it d
 ```bash
 CONTAINER_ID=""
 
+cleanup_stale_containers() {
+    # Remove leftover containers from previous runs that exited abnormally
+    # (kill -9, OOM, power loss — cases where the EXIT trap doesn't fire)
+    docker ps -a --filter "name=arpi-" --format '{{.ID}}' | xargs -r docker rm -f &>/dev/null || true
+}
+
 start_sandbox() {
+    cleanup_stale_containers
     local image="arpi-sandbox"
 
     # Use project-specific image if .arpi.Dockerfile exists
@@ -111,20 +122,19 @@ start_sandbox() {
         done < <(jq -r '.env[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
     fi
 
-    # Network restriction via iptables entrypoint (see "Network restriction" section)
+    # Network restriction: start container first, then inject iptables via docker exec.
+    # This avoids the entrypoint temp file race condition (writing a file to the bind
+    # mount and deleting it before the container finishes reading it).
     local cap_args=""
-    local entrypoint_args=""
+    local restricted=false
+    local allowed_hosts=""
     if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]]; then
         local network_mode
         network_mode=$(jq -r '.network.mode // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
         if [[ "$network_mode" == "restricted" ]]; then
-            local allowed_hosts
+            restricted=true
             allowed_hosts=$(jq -r '.network.allowedHosts[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null | tr '\n' ' ')
-            local entrypoint_file="$PROJECT_ROOT/.arpi-entrypoint.sh"
-            generate_entrypoint "$allowed_hosts" > "$entrypoint_file"
-            chmod +x "$entrypoint_file"
             cap_args="--cap-add=NET_ADMIN"
-            entrypoint_args="--entrypoint $entrypoint_file"
         fi
     fi
 
@@ -139,7 +149,6 @@ start_sandbox() {
         -e "GIT_COMMITTER_EMAIL=$git_email" \
         $env_args \
         $cap_args \
-        $entrypoint_args \
         "$image" \
         sleep infinity)
 
@@ -148,8 +157,12 @@ start_sandbox() {
         exit 1
     fi
 
-    # Clean up generated entrypoint
-    [[ -f "$PROJECT_ROOT/.arpi-entrypoint.sh" ]] && rm -f "$PROJECT_ROOT/.arpi-entrypoint.sh"
+    # Apply network restriction after container is running (no temp files, no race)
+    if [[ "$restricted" == true ]]; then
+        local iptables_script
+        iptables_script=$(generate_iptables_script "$allowed_hosts")
+        docker exec "$CONTAINER_ID" sh -c "$iptables_script"
+    fi
 }
 
 stop_sandbox() {
@@ -259,7 +272,7 @@ Configurable: additional var names listed in `.arpi.config.json` `"env"` array, 
 
 New command. Interactive. Creates:
 
-1. **`ARPI.md`** — Prompts whether to install the default workflow guide (even if one exists, asks whether to replace). Sources content from https://gist.github.com/rjcorwin/296885590dc8a4ebc64e70879dc04a0f. This file provides templates that the RPI phase prompts reference for output structure.
+1. **`ARPI.md`** — Prompts whether to install the default workflow guide (even if one exists, asks whether to replace). The default content is bundled inline in the arpi script itself (like the Dockerfile), so `arpi init` works offline with no external dependencies. The canonical source is https://gist.github.com/rjcorwin/296885590dc8a4ebc64e70879dc04a0f — updates to the gist can be pulled in by future versions of arpi, but the bundled copy is always the fallback. This file provides templates that the RPI phase prompts reference for output structure.
 
 2. **`.arpi.config.json`** — Project-level config. Starts with a sensible default:
    ```json
@@ -313,24 +326,25 @@ When `.arpi.config.json` has `network.mode: "restricted"`, arpi enforces egress 
 
 When mode is `"default"` or the config is absent, no network restriction is applied.
 
-**How it works:** arpi generates an entrypoint script at container startup that:
-1. Resolves each allowed domain to IP addresses via `getent hosts`
+**How it works:** arpi starts the container with `sleep infinity` (no custom entrypoint), then injects iptables rules via `docker exec` before any Claude calls run. This avoids temp files in the project directory and eliminates the race condition of deleting a bind-mounted entrypoint while the container reads it.
+
+The injection:
+1. Resolves each allowed domain to IP addresses via `getent hosts` inside the container
 2. Sets iptables rules: default DROP on OUTPUT, then ACCEPT for loopback, established connections, DNS (UDP/TCP 53 to Docker's DNS at 127.0.0.11), and TCP 443 to each resolved IP
-3. Execs into `sleep infinity` so the container stays alive for `docker exec`
 
 The container runs with `--cap-add=NET_ADMIN` when restricted mode is active. This grants iptables access within the container's own network namespace only — it does not grant host network access.
 
 ```bash
-generate_entrypoint() {
+generate_iptables_script() {
     local allowed_hosts="$1"  # space-separated list
-    local script="#!/bin/sh
+    cat <<'IPTABLES_EOF'
 set -e
 
 # Resolve allowed hosts to IPs
-ALLOWED_IPS=''
-for host in api.anthropic.com $allowed_hosts; do
-    ips=\$(getent hosts \"\$host\" 2>/dev/null | awk '{print \$1}' || true)
-    ALLOWED_IPS=\"\$ALLOWED_IPS \$ips\"
+ALLOWED_IPS=""
+for host in api.anthropic.com ALLOWED_HOSTS_PLACEHOLDER; do
+    ips=$(getent hosts "$host" 2>/dev/null | awk '{print $1}' || true)
+    ALLOWED_IPS="$ALLOWED_IPS $ips"
 done
 
 # Default policy: drop all outbound
@@ -347,61 +361,32 @@ iptables -A OUTPUT -p udp -d 127.0.0.11 --dport 53 -j ACCEPT
 iptables -A OUTPUT -p tcp -d 127.0.0.11 --dport 53 -j ACCEPT
 
 # Allow HTTPS to each resolved IP
-for ip in \$ALLOWED_IPS; do
-    iptables -A OUTPUT -p tcp -d \"\$ip\" --dport 443 -j ACCEPT
+for ip in $ALLOWED_IPS; do
+    iptables -A OUTPUT -p tcp -d "$ip" --dport 443 -j ACCEPT
 done
-
-exec sleep infinity
-"
-    echo "$script"
+IPTABLES_EOF
 }
-
-start_sandbox() {
-    # ... (image selection, git identity, env vars as before) ...
-
-    local entrypoint_args=""
-    local cap_args=""
-
-    if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]]; then
-        local network_mode
-        network_mode=$(jq -r '.network.mode // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null)
-        if [[ "$network_mode" == "restricted" ]]; then
-            local allowed_hosts
-            allowed_hosts=$(jq -r '.network.allowedHosts[]? // empty' "$PROJECT_ROOT/.arpi.config.json" 2>/dev/null | tr '\n' ' ')
-
-            local entrypoint_file="$PROJECT_ROOT/.arpi-entrypoint.sh"
-            generate_entrypoint "$allowed_hosts" > "$entrypoint_file"
-            chmod +x "$entrypoint_file"
-
-            cap_args="--cap-add=NET_ADMIN"
-            entrypoint_args="--entrypoint $entrypoint_file"
-        fi
-    fi
-
-    CONTAINER_ID=$(docker run -d \
-        --name "arpi-$$" \
-        -v "$PROJECT_ROOT":"$PROJECT_ROOT" \
-        -w "$PROJECT_ROOT" \
-        -v "$HOME/.claude":"$HOME/.claude":ro \
-        -e "GIT_AUTHOR_NAME=$git_name" \
-        -e "GIT_AUTHOR_EMAIL=$git_email" \
-        -e "GIT_COMMITTER_NAME=$git_name" \
-        -e "GIT_COMMITTER_EMAIL=$git_email" \
-        $env_args \
-        $cap_args \
-        $entrypoint_args \
-        "$image" \
-        sleep infinity)
-
-    # Clean up the generated entrypoint file
-    [[ -f "$PROJECT_ROOT/.arpi-entrypoint.sh" ]] && rm -f "$PROJECT_ROOT/.arpi-entrypoint.sh"
-}
+# The function replaces ALLOWED_HOSTS_PLACEHOLDER with the actual hosts before returning.
+# (Implementation detail: sed or parameter substitution — kept simple here for readability.)
 ```
 
 **Limitations (documented, not hidden):**
 - Domain-to-IP resolution happens at container startup. If a service's IPs change mid-run, the new IPs won't be allowed. This is acceptable for bounded-duration runs.
 - `--cap-add=NET_ADMIN` is required for iptables. This is scoped to the container's network namespace and does not affect the host.
 - Only port 443 (HTTPS) is allowed to resolved IPs. If a service uses a non-standard port, it won't be reachable. This is intentional — the allowlist is for HTTPS APIs, not arbitrary services.
+
+### Security Model
+
+arpi's core value proposition is making `--dangerously-skip-permissions` safe by containing it. Here's how:
+
+**`--dangerously-skip-permissions` is always used inside the container, never on the host.** The flag tells Claude CLI to execute tool calls (file writes, shell commands, etc.) without interactive approval. This is necessary because arpi runs non-interactive `claude -p` calls — there's no human at the terminal to approve each action. Without a sandbox, this gives Claude unrestricted access to the host machine. With arpi's sandbox, Claude's unrestricted actions are bounded by the container's isolation:
+
+- **Filesystem:** Claude can only read/write `$PROJECT_ROOT` (bind-mounted rw). No access to home directory, SSH keys, cloud credentials, other repos, or system files. `~/.claude/` is mounted read-only — Claude can authenticate but not modify auth state.
+- **Network (default):** Unrestricted. Claude can make outbound requests but has no secrets to exfiltrate beyond what's in the project directory.
+- **Network (restricted):** When `.arpi.config.json` enables restricted mode, outbound traffic is limited to `api.anthropic.com` and explicitly allowed hosts. Claude cannot reach arbitrary endpoints.
+- **Process:** Claude runs as a regular user inside the container. The container is torn down on script exit. No persistent services, no cron jobs, no daemons survive the run.
+
+This is the tradeoff: `--dangerously-skip-permissions` is dangerous on a host machine, but acceptable inside a container that limits what "unrestricted" actually means. The flag enables the automated workflow; the sandbox constrains its blast radius.
 
 ### PROJECT_ROOT detection
 
@@ -456,7 +441,7 @@ Write a `curl | sh` installer that places `arpi` on PATH and checks for Docker.
 
 ## Reference: Default ARPI.md
 
-The default ARPI.md (source: https://gist.github.com/rjcorwin/296885590dc8a4ebc64e70879dc04a0f) is what `arpi init` scaffolds. Teams customize it from there. Below is its structure for reference — this is the repo's file, not arpi's.
+The default ARPI.md is bundled inline in the arpi script. The canonical source is https://gist.github.com/rjcorwin/296885590dc8a4ebc64e70879dc04a0f — `arpi init` uses the bundled copy (works offline) and future arpi versions may pull updates from the gist. Teams customize it from there. Below is its structure for reference — this is the repo's file, not arpi's.
 
 ### Workflow steps
 
