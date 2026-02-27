@@ -28,6 +28,32 @@ arpi's target user already runs `claude --dangerously-skip-permissions` because 
 - Running arpi itself inside the container
 - Interactive `claude` sessions (only `claude -p` / `--print`)
 
+## Host Prerequisites
+
+- **Docker** — Docker Engine or Docker Desktop. arpi manages all container lifecycle; the user just needs `docker` on PATH.
+- **jq** — used to parse `.arpi.config.json` for network restriction and env var forwarding. Not needed if no config file exists, but arpi checks for it early and prints a friendly error if missing and a config file is present.
+- **git** — for `PROJECT_ROOT` detection and deriving git identity.
+
+arpi checks these on startup:
+
+```bash
+check_prerequisites() {
+    if ! command -v docker &>/dev/null; then
+        log_err "Docker is required but not installed. See https://docs.docker.com/get-docker/"
+        exit 1
+    fi
+    if ! command -v git &>/dev/null; then
+        log_err "git is required but not installed."
+        exit 1
+    fi
+    if [[ -f "$PROJECT_ROOT/.arpi.config.json" ]] && ! command -v jq &>/dev/null; then
+        log_err "jq is required to read .arpi.config.json but not installed."
+        log_err "Install: brew install jq (Mac) or apt-get install jq (Linux)"
+        exit 1
+    fi
+}
+```
+
 ## Technical Design
 
 ### Architecture (decision-001)
@@ -199,10 +225,10 @@ A minimal Dockerfile bundled inline in the arpi script (or shipped alongside it)
 ```dockerfile
 FROM node:22-slim
 RUN npm install -g @anthropic-ai/claude-code
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git iptables && rm -rf /var/lib/apt/lists/*
 ```
 
-`node:22-slim` is the smallest base that gives us npm for installing claude. The image includes only claude CLI, git, and standard Unix tools. No language runtimes beyond Node (which is there for claude, not for the user's project).
+`node:22-slim` is the smallest base that gives us npm for installing claude. The image includes only claude CLI, git, iptables (for network restriction), and standard Unix tools. No language runtimes beyond Node (which is there for claude, not for the user's project). iptables is ~1MB and harmless when unused — including it unconditionally avoids needing a separate image for restricted-network projects.
 
 arpi checks for the image on startup and builds it if missing:
 
@@ -213,7 +239,7 @@ ensure_base_image() {
         docker build -t arpi-sandbox - <<'DOCKERFILE'
 FROM node:22-slim
 RUN npm install -g @anthropic-ai/claude-code
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git iptables && rm -rf /var/lib/apt/lists/*
 DOCKERFILE
     fi
 }
