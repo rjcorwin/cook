@@ -239,10 +239,13 @@ The container entrypoint script sets iptables rules before exec-ing into `sleep 
 - Alternative: mount the host's claude binary into the container. This avoids version pinning but couples to host's node/npm setup and may have dynamic linking issues across OS boundaries.
 - Recommendation: install claude in the image. Accept the version pinning. Provide an `arpi update` command that rebuilds the image.
 
-### CONTRIBUTING.md and CLAUDE.md dependency
-- The current arpi prompts reference `CONTRIBUTING.md` and `CLAUDE.md` in the project root. These provide workflow templates and project context.
-- For adoption: arpi should work without these files (graceful degradation). The prompts should be self-contained enough to produce useful output even if these files don't exist.
-- Stretch: `arpi init` could scaffold minimal versions of these files.
+### ARPI.md — per-repo agent instructions
+- `ARPI.md` is a per-repository file that defines what the agent does at each step. It contains prompts, templates, and workflow context. Each team or project can customize it to fit their conventions — different template formats, different review criteria, different output expectations.
+- arpi (the script) is only opinionated about the **flow**: what steps run in what order (research → review → gate → plan → review → gate → implement → review → gate), iteration loops, and container lifecycle. It does not contain prompt engineering.
+- The script tells Claude which phase and step it's on, what iteration, the plan directory, and to read `ARPI.md` for its instructions. That's it.
+- A default `ARPI.md` is available at https://gist.github.com/rjcorwin/296885590dc8a4ebc64e70879dc04a0f — `arpi init` offers to scaffold it into the project. Teams then customize it.
+- If `ARPI.md` is absent, arpi still runs the flow but Claude has no step-level instructions — output quality depends entirely on Claude's judgment. The file is strongly recommended but not required.
+- `CLAUDE.md` can provide additional project-specific context (codebase conventions, architecture notes, etc.) independent of the RPI workflow.
 
 ### Image distribution
 - Option A: Developer builds locally (`arpi` runs `docker build` on first use from a bundled Dockerfile).
