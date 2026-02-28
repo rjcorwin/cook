@@ -12,6 +12,7 @@ trap 'echo "ERROR: Script failed at line $LINENO (exit code $?)" >&2' ERR
 #   cook plan <slug>            Run the plan phase
 #   cook implement <slug>       Run the implement phase
 #   cook yolo "feature ask"     Run all phases end-to-end
+#   cook rebuild                Rebuild the sandbox Docker image
 #
 # Options:
 #   --iterations N              Max review iterations (default: 3)
@@ -195,7 +196,6 @@ start_sandbox() {
         --name "cook-$$" \
         -v "$PROJECT_ROOT":"$PROJECT_ROOT" \
         -w "$PROJECT_ROOT" \
-        -v "$HOME/.claude":"$HOME/.claude":ro \
         -e "GIT_AUTHOR_NAME=$git_name" \
         -e "GIT_AUTHOR_EMAIL=$git_email" \
         -e "GIT_COMMITTER_NAME=$git_name" \
@@ -212,12 +212,32 @@ start_sandbox() {
 
     log_ok "Sandbox started (container: cook-$$)"
 
+    # Create non-root user matching host UID/GID so file permissions work on
+    # the bind-mounted project directory (and Claude CLI accepts --dangerously-skip-permissions)
+    local host_uid host_gid
+    host_uid=$(id -u)
+    host_gid=$(id -g)
+    docker exec "$CONTAINER_ID" bash -c \
+        "groupadd -g $host_gid -o cookgroup 2>/dev/null || true; \
+         useradd -m -s /bin/bash -u $host_uid -g $host_gid -o cook 2>/dev/null || true"
+
+    # Copy auth files into container (not bind-mounted — container gets its own
+    # writable copies, host files stay untouched, everything is torn down on exit)
+    docker exec "$CONTAINER_ID" mkdir -p /home/cook/.claude
+    if [[ -f "$HOME/.claude.json" ]]; then
+        docker cp "$HOME/.claude.json" "$CONTAINER_ID:/home/cook/.claude.json"
+    fi
+    if [[ -f "$HOME/.claude/.credentials.json" ]]; then
+        docker cp "$HOME/.claude/.credentials.json" "$CONTAINER_ID:/home/cook/.claude/.credentials.json"
+    fi
+    docker exec "$CONTAINER_ID" chown -R "$host_uid:$host_gid" /home/cook
+
     # Apply network restriction after container is running (no temp files, no race)
     if [[ "$restricted" == true ]]; then
         log_step "Applying network restrictions..."
         local iptables_script
         iptables_script=$(generate_iptables_script "$allowed_hosts")
-        docker exec "$CONTAINER_ID" sh -c "$iptables_script"
+        docker exec -u root "$CONTAINER_ID" sh -c "$iptables_script"
         log_ok "Network restricted to: api.anthropic.com ${allowed_hosts}"
     fi
 }
@@ -235,7 +255,7 @@ run_claude() {
     local output
     log_step "Running Claude..."
     [[ -z "$CONTAINER_ID" ]] && start_sandbox
-    if output=$(docker exec "$CONTAINER_ID" \
+    if output=$(docker exec --user "$(id -u):$(id -g)" -e HOME=/home/cook "$CONTAINER_ID" \
         claude --model "$MODEL" --dangerously-skip-permissions --print "$prompt" 2>&1); then
         echo "$output"
         return 0
@@ -257,14 +277,14 @@ gate_check() {
     [[ -z "$CONTAINER_ID" ]] && start_sandbox
 
     local verdict
-    verdict=$(docker exec "$CONTAINER_ID" \
+    verdict=$(docker exec --user "$(id -u):$(id -g)" -e HOME=/home/cook "$CONTAINER_ID" \
         claude --model "$MODEL" --dangerously-skip-permissions --print \
 "Phase: ${phase_name} — AI:Gate
 Plan directory: ${PLAN_DIR}
 Review file: ${review_file}
 Iteration: ${iteration}/${max_iterations}
 
-Read COOK.md for your instructions. Based on the review, determine if this phase is ready to proceed.
+Based on the review, determine if this phase is ready to proceed.
 
 Respond with EXACTLY one line:
 - PROCEED: [brief reason] — if the review approves or issues are minor/trivial
@@ -829,7 +849,7 @@ Plan directory: ${PLAN_DIR}
 Feature request: ${PLAN_DIR}/ask.md
 Iteration: 1/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read the feature request in ask.md and explore the codebase. Write research.md in the plan directory covering: requirements, system architecture, constraints, prior art, and open questions."
 
         if [[ -f "$PLAN_DIR/research.md" ]]; then
             log_ok "research.md created"
@@ -859,7 +879,7 @@ Plan directory: ${PLAN_DIR}
 Write review to: ${review_file}
 Iteration: ${iteration}/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read all files in the plan directory. Review research.md for completeness and accuracy. Write the review file with: summary, strengths, gaps (High/Medium/Low), and a recommendation (ready or needs revision)."
 
             if [[ ! -f "$review_file" ]]; then
                 log_err "Research review file was not created"
@@ -885,7 +905,7 @@ Plan directory: ${PLAN_DIR}
 Address issues in: ${review_file}
 Iteration: $((iteration + 1))/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read the review file and address every issue by updating research.md."
             log_ok "Research updated based on review feedback"
         fi
 
@@ -916,7 +936,7 @@ cmd_plan() {
 Plan directory: ${PLAN_DIR}
 Iteration: 1/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read research.md for context and decisions. Write plan.md with: summary, motivation, goals, non-goals, technical design, and implementation approach. For open questions in research.md, write decision-XXX-name.md documents."
 
         if [[ -f "$PLAN_DIR/plan.md" ]]; then
             log_ok "plan.md created"
@@ -946,7 +966,7 @@ Plan directory: ${PLAN_DIR}
 Write review to: ${review_file}
 Iteration: ${iteration}/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read all files in the plan directory. Review plan.md against research.md. Write the review file with: summary, strengths, concerns (High/Medium/Low), and a recommendation (ready or needs revision)."
 
             if [[ ! -f "$review_file" ]]; then
                 log_err "Plan review file was not created"
@@ -972,7 +992,7 @@ Plan directory: ${PLAN_DIR}
 Address issues in: ${review_file}
 Iteration: $((iteration + 1))/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read the review file and address every issue by updating plan.md and decision documents."
             log_ok "Plan updated based on review feedback"
         fi
 
@@ -1014,7 +1034,7 @@ Branch: ${PLAN_SLUG}
 Devlog: ${PLAN_DIR}/devlog-001.md
 Iteration: 1/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read plan.md and all decision documents. Implement the plan. When done, write the devlog covering: what was done, tricky parts, decisions made, and deviations from plan. Stage and commit your changes."
 
         log_ok "Initial implementation complete"
     else
@@ -1040,7 +1060,7 @@ Branch: ${PLAN_SLUG}
 Write review to: ${review_file}
 Iteration: ${iteration}/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read all plan files. Run 'git diff main...HEAD' to see changes. Review the implementation against plan.md. Write the review file with: summary, what works well, issues (High/Medium/Low), and a recommendation (ready or needs revision)."
 
             if [[ ! -f "$review_file" ]]; then
                 log_err "Code review file was not created"
@@ -1071,7 +1091,7 @@ Address issues in: ${review_file}
 Devlog: ${PLAN_DIR}/devlog-${next_devlog_num}.md
 Iteration: $((iteration + 1))/${ITERATIONS}
 
-Read COOK.md for your instructions."
+Read COOK.md for detailed instructions if it exists. Read the review file and fix every issue. Write the devlog summarizing what was fixed. Stage and commit."
             log_ok "Code updated based on review feedback"
         fi
 
@@ -1086,7 +1106,7 @@ Read COOK.md for your instructions."
 Plan directory: ${PLAN_DIR}
 Branch: ${PLAN_SLUG}
 
-Read COOK.md for the pr.md template. Read all files in the plan directory and the git diff. Write ${PLAN_DIR}/pr.md."
+Read COOK.md for the pr.md template if it exists. Read all files in the plan directory. Run 'git diff main...HEAD' and 'git log main..HEAD --oneline'. Write ${PLAN_DIR}/pr.md with: summary paragraph, key decisions, code walkthrough (recommended reading order), and testing instructions."
         log_ok "pr.md created"
     else
         log_ok "pr.md already exists"
@@ -1100,6 +1120,25 @@ Read COOK.md for the pr.md template. Read all files in the plan directory and th
     echo -e "  ${BOLD}Next steps:${NC}"
     echo -e "    1. Review files in ${CYAN}${PLAN_DIR}/${NC}"
     echo -e "    2. Create PR: ${CYAN}gh pr create --title '${PLAN_SLUG}' --body-file ${PLAN_DIR}/pr.md${NC}"
+}
+
+# ─── rebuild ────────────────────────────────────
+cmd_rebuild() {
+    log_phase "Rebuild sandbox image"
+
+    if docker image inspect cook-sandbox &>/dev/null; then
+        log_step "Removing existing cook-sandbox image..."
+        docker rmi cook-sandbox
+    fi
+
+    log_step "Building cook-sandbox image..."
+    docker build -t cook-sandbox --no-cache - <<'DOCKERFILE'
+FROM node:22-slim
+RUN npm install -g @anthropic-ai/claude-code
+RUN apt-get update && apt-get install -y git iptables && rm -rf /var/lib/apt/lists/*
+DOCKERFILE
+
+    log_ok "cook-sandbox image rebuilt"
 }
 
 # ─── yolo ───────────────────────────────────────
@@ -1150,7 +1189,7 @@ fi
 # Validate command
 case "$COMMAND" in
     help)       usage ;;
-    init|new|research|plan|implement|yolo) ;;
+    init|new|research|plan|implement|yolo|rebuild) ;;
     *) log_err "Unknown command: $COMMAND"; usage ;;
 esac
 
@@ -1171,4 +1210,5 @@ case "$COMMAND" in
     plan)       cmd_plan "$POSITIONAL" ;;
     implement)  cmd_implement "$POSITIONAL" ;;
     yolo)       cmd_yolo "$POSITIONAL" ;;
+    rebuild)    cmd_rebuild ;;
 esac
