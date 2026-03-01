@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // Colors
@@ -87,7 +89,6 @@ func usage() {
   --model MODEL                   Claude model (default: opus)
   -h, --help                      Show this help
 `, bold, nc, bold, nc, bold, nc)
-	os.Exit(0)
 }
 
 func main() {
@@ -110,11 +111,13 @@ func main() {
 
 	if *help {
 		usage()
+		return
 	}
 
 	args := flag.Args()
 	if len(args) == 0 {
 		usage()
+		return
 	}
 
 	switch args[0] {
@@ -124,6 +127,7 @@ func main() {
 		cmdRebuild()
 	case "help":
 		usage()
+		return
 	default:
 		// First arg is the work prompt
 		if *work == "" {
@@ -151,6 +155,15 @@ func main() {
 		}
 		defer sandbox.stopSandbox()
 
+		// Ensure cleanup on SIGINT/SIGTERM
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			sandbox.stopSandbox()
+			os.Exit(1)
+		}()
+
 		if err := agentLoop(sandbox, Config{
 			WorkPrompt:    *work,
 			ReviewPrompt:  *review,
@@ -171,8 +184,11 @@ func cmdInit(projectRoot string) {
 	// COOK.md
 	cookPath := filepath.Join(projectRoot, "COOK.md")
 	if _, err := os.Stat(cookPath); err != nil {
-		os.WriteFile(cookPath, []byte(defaultCookMD), 0644)
-		logOK("COOK.md created")
+		if err := os.WriteFile(cookPath, []byte(defaultCookMD), 0644); err != nil {
+			logErr("Failed to create COOK.md: %v", err)
+		} else {
+			logOK("COOK.md created")
+		}
 	} else {
 		logOK("COOK.md already exists")
 	}
@@ -180,8 +196,11 @@ func cmdInit(projectRoot string) {
 	// .cook.config.json
 	configPath := filepath.Join(projectRoot, ".cook.config.json")
 	if _, err := os.Stat(configPath); err != nil {
-		os.WriteFile(configPath, []byte(defaultCookConfigJSON), 0644)
-		logOK(".cook.config.json created")
+		if err := os.WriteFile(configPath, []byte(defaultCookConfigJSON), 0644); err != nil {
+			logErr("Failed to create .cook.config.json: %v", err)
+		} else {
+			logOK(".cook.config.json created")
+		}
 	} else {
 		logOK(".cook.config.json already exists")
 	}
@@ -189,15 +208,20 @@ func cmdInit(projectRoot string) {
 	// .cook.Dockerfile
 	dockerPath := filepath.Join(projectRoot, ".cook.Dockerfile")
 	if _, err := os.Stat(dockerPath); err != nil {
-		os.WriteFile(dockerPath, []byte(defaultCookDockerfile), 0644)
-		logOK(".cook.Dockerfile created")
+		if err := os.WriteFile(dockerPath, []byte(defaultCookDockerfile), 0644); err != nil {
+			logErr("Failed to create .cook.Dockerfile: %v", err)
+		} else {
+			logOK(".cook.Dockerfile created")
+		}
 	} else {
 		logOK(".cook.Dockerfile already exists")
 	}
 
 	// .cook/logs/ directory
 	logsDir := filepath.Join(projectRoot, ".cook", "logs")
-	os.MkdirAll(logsDir, 0755)
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		logErr("Failed to create logs directory: %v", err)
+	}
 
 	fmt.Fprintf(os.Stderr, "\n%s✓ Project initialized for cook%s\n", green, nc)
 	fmt.Fprintf(os.Stderr, "  Edit %sCOOK.md%s to customize the agent loop prompts\n", cyan, nc)

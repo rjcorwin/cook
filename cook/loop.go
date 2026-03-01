@@ -65,7 +65,9 @@ func agentLoop(sandbox *Sandbox, config Config, cookMD string) error {
 			}
 
 			lastMessage = output
-			appendToLog(logFile, step.name, i, output)
+			if err := appendToLog(logFile, step.name, i, output); err != nil {
+				logWarn("Failed to write session log: %v", err)
+			}
 		}
 
 		// Check gate verdict
@@ -91,6 +93,8 @@ func executeTemplate(tmpl *template.Template, ctx LoopContext) (string, error) {
 	return buf.String(), nil
 }
 
+// createSessionLog returns a host filesystem path that is also valid inside
+// the container because the project root is bind-mounted at the same path.
 func createSessionLog(projectRoot string) (string, error) {
 	logDir := filepath.Join(projectRoot, ".cook", "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {

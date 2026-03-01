@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -20,6 +21,9 @@ func loadConfig(projectRoot string) CookConfig {
 	if err != nil {
 		return cfg
 	}
-	json.Unmarshal(data, &cfg)
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		logWarn("Malformed .cook.config.json: %v", err)
+		fmt.Fprintf(os.Stderr, "  Using default configuration\n")
+	}
 	return cfg
 }

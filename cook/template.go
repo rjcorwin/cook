@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
-	"text/template"
 )
 
 type LoopContext struct {
@@ -48,14 +45,3 @@ func loadCookMD(projectRoot string) string {
 	return string(data)
 }
 
-func renderTemplate(cookMD string, ctx LoopContext) (string, error) {
-	tmpl, err := template.New("cook").Parse(cookMD)
-	if err != nil {
-		return "", fmt.Errorf("parsing COOK.md: %w", err)
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, ctx); err != nil {
-		return "", fmt.Errorf("rendering COOK.md: %w", err)
-	}
-	return buf.String(), nil
-}

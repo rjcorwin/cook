@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -50,13 +51,19 @@ func buildImage(cli *client.Client, imageName, dockerfile string) error {
 	// Create tar archive with Dockerfile
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	tw.WriteHeader(&tar.Header{
+	if err := tw.WriteHeader(&tar.Header{
 		Name: "Dockerfile",
 		Size: int64(len(dockerfile)),
 		Mode: 0644,
-	})
-	tw.Write([]byte(dockerfile))
-	tw.Close()
+	}); err != nil {
+		return fmt.Errorf("writing tar header: %w", err)
+	}
+	if _, err := tw.Write([]byte(dockerfile)); err != nil {
+		return fmt.Errorf("writing tar data: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("closing tar: %w", err)
+	}
 
 	resp, err := cli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
 		Tags:       []string{imageName},
@@ -81,8 +88,8 @@ func startSandbox(projectRoot string, cfg CookConfig) (*Sandbox, error) {
 		return nil, fmt.Errorf("connecting to Docker: %w", err)
 	}
 
-	// Clean up stale containers before starting
-	cleanupStaleContainers(cli)
+	// Clean up stale containers from this project before starting
+	cleanupStaleContainers(cli, projectRoot)
 
 	if err := ensureBaseImage(cli); err != nil {
 		return nil, err
@@ -92,7 +99,8 @@ func startSandbox(projectRoot string, cfg CookConfig) (*Sandbox, error) {
 	imageName := baseImageName
 	projectDockerfile := filepath.Join(projectRoot, ".cook.Dockerfile")
 	if data, err := os.ReadFile(projectDockerfile); err == nil {
-		projImage := fmt.Sprintf("cook-project-%s", filepath.Base(projectRoot))
+		hash := fmt.Sprintf("%x", sha256.Sum256(data))[:12]
+		projImage := fmt.Sprintf("cook-project-%s:%s", filepath.Base(projectRoot), hash)
 		_, _, inspectErr := cli.ImageInspectWithRaw(ctx, projImage)
 		if inspectErr != nil {
 			logStep("Building project-specific sandbox image...")
@@ -142,6 +150,9 @@ func startSandbox(projectRoot string, cfg CookConfig) (*Sandbox, error) {
 			Image: imageName,
 			Cmd:   []string{"sleep", "infinity"},
 			Env:   env,
+			Labels: map[string]string{
+				"cook.project": projectRoot,
+			},
 		},
 		&container.HostConfig{
 			Binds:  []string{projectRoot + ":" + projectRoot},
@@ -203,39 +214,7 @@ func (sb *Sandbox) stopSandbox() {
 }
 
 func (sb *Sandbox) containerExec(userSpec string, cmd []string) (string, error) {
-	ctx := context.Background()
-
-	execCfg := container.ExecOptions{
-		User:         userSpec,
-		Cmd:          cmd,
-		AttachStdout: true,
-		AttachStderr: true,
-		WorkingDir:   sb.projectRoot,
-	}
-
-	execResp, err := sb.client.ContainerExecCreate(ctx, sb.containerID, execCfg)
-	if err != nil {
-		return "", fmt.Errorf("exec create: %w", err)
-	}
-
-	attach, err := sb.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
-	if err != nil {
-		return "", fmt.Errorf("exec attach: %w", err)
-	}
-	defer attach.Close()
-
-	var stdout, stderr bytes.Buffer
-	stdcopy.StdCopy(&stdout, &stderr, attach.Reader)
-
-	inspect, err := sb.client.ContainerExecInspect(ctx, execResp.ID)
-	if err != nil {
-		return stdout.String(), fmt.Errorf("exec inspect: %w", err)
-	}
-	if inspect.ExitCode != 0 {
-		return stdout.String(), fmt.Errorf("command exited %d: %s", inspect.ExitCode, stderr.String())
-	}
-
-	return stdout.String(), nil
+	return sb.containerExecWithEnv(userSpec, nil, cmd)
 }
 
 func (sb *Sandbox) runClaude(model, prompt string) (string, error) {
@@ -299,20 +278,28 @@ func (sb *Sandbox) copyFileToContainer(hostPath, containerPath string) error {
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	tw.WriteHeader(&tar.Header{
+	if err := tw.WriteHeader(&tar.Header{
 		Name: filepath.Base(containerPath),
 		Size: int64(len(data)),
 		Mode: 0644,
-	})
-	tw.Write(data)
-	tw.Close()
+	}); err != nil {
+		return fmt.Errorf("writing tar header: %w", err)
+	}
+	if _, err := tw.Write(data); err != nil {
+		return fmt.Errorf("writing tar data: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("closing tar: %w", err)
+	}
 
 	ctx := context.Background()
 	return sb.client.CopyToContainer(ctx, sb.containerID, filepath.Dir(containerPath), &buf, container.CopyToContainerOptions{})
 }
 
 func generateIptablesScript(allowedHosts []string) string {
-	hosts := append([]string{"api.anthropic.com"}, allowedHosts...)
+	hosts := make([]string, 0, len(allowedHosts)+1)
+	hosts = append(hosts, "api.anthropic.com")
+	hosts = append(hosts, allowedHosts...)
 	hostList := strings.Join(hosts, " ")
 
 	return fmt.Sprintf(`set -e
@@ -339,13 +326,16 @@ func gitConfig(key, fallback string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func cleanupStaleContainers(cli *client.Client) {
+func cleanupStaleContainers(cli *client.Client, projectRoot string) {
 	ctx := context.Background()
 	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return
 	}
 	for _, c := range containers {
+		if c.Labels["cook.project"] != projectRoot {
+			continue
+		}
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, "/cook-") {
 				cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true})
