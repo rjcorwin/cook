@@ -72,8 +72,8 @@ func agentLoop(sandbox *Sandbox, config Config, cookMD string) error {
 
 		// Check gate verdict
 		verdict := parseGateVerdict(lastMessage)
-		if verdict == "PROCEED" {
-			logOK("Gate: PROCEED — loop complete")
+		if verdict == "DONE" {
+			logOK("Gate: DONE — loop complete")
 			return nil
 		}
 		if i < config.MaxIterations {
@@ -101,7 +101,13 @@ func createSessionLog(projectRoot string) (string, error) {
 		return "", fmt.Errorf("creating log directory: %w", err)
 	}
 	timestamp := time.Now().Format("2006-01-02-150405")
-	return filepath.Join(logDir, timestamp+".md"), nil
+	logPath := filepath.Join(logDir, timestamp+".md")
+	f, err := os.Create(logPath)
+	if err != nil {
+		return "", fmt.Errorf("creating log file: %w", err)
+	}
+	f.Close()
+	return logPath, nil
 }
 
 func appendToLog(logFile, step string, iteration int, output string) error {
@@ -115,16 +121,23 @@ func appendToLog(logFile, step string, iteration int, output string) error {
 	return err
 }
 
+var doneKeywords = []string{"DONE", "PASS", "COMPLETE", "APPROVE", "ACCEPT"}
+var iterateKeywords = []string{"ITERATE", "REVISE", "RETRY"}
+
 func parseGateVerdict(output string) string {
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		upper := strings.ToUpper(line)
-		if strings.HasPrefix(upper, "PROCEED") {
-			return "PROCEED"
+		for _, kw := range doneKeywords {
+			if strings.HasPrefix(upper, kw) {
+				return "DONE"
+			}
 		}
-		if strings.HasPrefix(upper, "ITERATE") {
-			return "ITERATE"
+		for _, kw := range iterateKeywords {
+			if strings.HasPrefix(upper, kw) {
+				return "ITERATE"
+			}
 		}
 	}
 	return "ITERATE" // default to iterate if ambiguous

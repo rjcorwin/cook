@@ -50,10 +50,10 @@ const defaultReviewPrompt = `Review the work done in the previous step.
 Check the session log for what changed.
 Identify issues categorized as High, Medium, or Low severity.`
 
-const defaultGatePrompt = `Based on the review, respond with exactly PROCEED or ITERATE
+const defaultGatePrompt = `Based on the review, respond with exactly DONE or ITERATE
 on its own line, followed by a brief reason.
 
-PROCEED if: the work is complete and no High severity issues remain.
+DONE if: the work is complete and no High severity issues remain.
 ITERATE if: there are High severity issues or the work is incomplete.`
 
 const defaultCookConfigJSON = `{
@@ -76,8 +76,10 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `%scook%s — sandboxed agent loop
 
 %sUsage:%s
-  cook "prompt"                   Run the work→review→gate loop
-  cook "prompt" 5                 Run with 5 max iterations
+  cook "work"                     Run the work→review→gate loop
+  cook "work" "review" "gate"    Custom prompts for each step
+  cook "work" 5                  Run with 5 max iterations
+  cook "work" "review" "gate" 5  All custom prompts + iterations
   cook init                       Set up COOK.md, config, and Dockerfile
   cook rebuild                    Rebuild the sandbox Docker image
 
@@ -129,13 +131,19 @@ func main() {
 		usage()
 		return
 	default:
-		// First arg is the work prompt
+		// Positional args: cook <work> [review] [gate] [iterations]
 		if *work == "" {
 			*work = args[0]
 		}
-		// Second arg is iteration count if numeric
-		if len(args) > 1 {
-			if n, err := strconv.Atoi(args[1]); err == nil {
+		if len(args) > 1 && *review == defaultReviewPrompt {
+			*review = args[1]
+		}
+		if len(args) > 2 && *gate == defaultGatePrompt {
+			*gate = args[2]
+		}
+		// Last arg is iteration count if numeric
+		if last := args[len(args)-1]; len(args) > 1 {
+			if n, err := strconv.Atoi(last); err == nil {
 				*maxIter = n
 			}
 		}
