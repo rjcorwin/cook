@@ -1,13 +1,11 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
-# cook installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/rjcorwin/arpi/main/install.sh | sh
+# cook installer — clone, build, install
+# Usage: curl -fsSL https://raw.githubusercontent.com/rjcorwin/cook/main/install.sh | sh
 
-REPO="rjcorwin/arpi"
-BRANCH="main"
+REPO_URL="https://github.com/rjcorwin/cook.git"
 INSTALL_DIR="${COOK_INSTALL_DIR:-$HOME/.local/bin}"
-SCRIPT_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/cook"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -16,56 +14,78 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-echo -e "${BOLD}cook${NC} installer"
-echo ""
+printf "${BOLD}cook${NC} installer\n\n"
 
-# Create install directory
-mkdir -p "$INSTALL_DIR"
+# --- Check prerequisites ---
 
-# Download
-echo -e "${CYAN}▸${NC} Downloading cook to ${INSTALL_DIR}/cook..."
-if command -v curl &>/dev/null; then
-    curl -fsSL "$SCRIPT_URL" -o "${INSTALL_DIR}/cook"
-elif command -v wget &>/dev/null; then
-    wget -q "$SCRIPT_URL" -O "${INSTALL_DIR}/cook"
-else
-    echo -e "${RED}✗${NC} Neither curl nor wget found. Install one and try again."
+fail=0
+
+if ! command -v git >/dev/null 2>&1; then
+    printf "${RED}x${NC} git is required but not installed.\n"
+    fail=1
+fi
+
+if ! command -v go >/dev/null 2>&1; then
+    printf "${RED}x${NC} go is required but not installed.\n"
+    printf "  Install: ${CYAN}https://go.dev/dl/${NC}\n"
+    fail=1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+    printf "${YELLOW}!${NC} Docker is not installed (required at runtime, not for building).\n"
+    printf "  Install: ${CYAN}https://docs.docker.com/get-docker/${NC}\n"
+fi
+
+if [ "$fail" -eq 1 ]; then
+    printf "\nInstall the missing prerequisites and try again.\n"
     exit 1
 fi
 
-chmod +x "${INSTALL_DIR}/cook"
-echo -e "${GREEN}✓${NC} Installed to ${INSTALL_DIR}/cook"
+# --- Build ---
 
-# Check PATH
-if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
-    echo ""
-    echo -e "${YELLOW}⚠${NC} ${INSTALL_DIR} is not in your PATH."
-    echo -e "  Add it by appending this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-    echo ""
-    echo -e "    ${CYAN}export PATH=\"${INSTALL_DIR}:\$PATH\"${NC}"
-    echo ""
+# Detect if we're already inside the cook repo
+IN_REPO=0
+if [ -f "cook/main.go" ] && [ -f "cook/go.mod" ]; then
+    IN_REPO=1
+    SRC_DIR="$(pwd)"
 fi
 
-# Check Docker
-echo ""
-if command -v docker &>/dev/null; then
-    echo -e "${GREEN}✓${NC} Docker found"
-else
-    echo -e "${YELLOW}⚠${NC} Docker is not installed."
-    echo -e "  cook requires Docker to run Claude in a sandboxed container."
-    echo -e "  Install: ${CYAN}https://docs.docker.com/get-docker/${NC}"
+if [ "$IN_REPO" -eq 0 ]; then
+    SRC_DIR="$(mktemp -d)"
+    printf "${CYAN}>${NC} Cloning cook...\n"
+    git clone --depth 1 "$REPO_URL" "$SRC_DIR" 2>&1
 fi
 
-# Check git
-if command -v git &>/dev/null; then
-    echo -e "${GREEN}✓${NC} git found"
-else
-    echo -e "${YELLOW}⚠${NC} git is not installed. cook requires git."
+printf "${CYAN}>${NC} Building...\n"
+cd "$SRC_DIR/cook"
+go build -o cook .
+
+# --- Install ---
+
+mkdir -p "$INSTALL_DIR"
+cp cook "$INSTALL_DIR/cook"
+chmod +x "$INSTALL_DIR/cook"
+printf "${GREEN}ok${NC} Installed to ${INSTALL_DIR}/cook\n"
+
+# Clean up temp dir
+if [ "$IN_REPO" -eq 0 ]; then
+    rm -rf "$SRC_DIR"
 fi
 
-echo ""
-echo -e "${BOLD}Get started:${NC}"
-echo -e "  ${CYAN}cd your-project${NC}"
-echo -e "  ${CYAN}cook init${NC}                      # set up COOK.md and config"
-echo -e "  ${CYAN}cook yolo \"Add dark mode\"${NC}      # let it cook"
-echo ""
+# --- PATH check ---
+
+case ":${PATH}:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *)
+        printf "\n${YELLOW}!${NC} ${INSTALL_DIR} is not in your PATH.\n"
+        printf "  Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):\n\n"
+        printf "    ${CYAN}export PATH=\"%s:\$PATH\"${NC}\n\n" "$INSTALL_DIR"
+        ;;
+esac
+
+# --- Done ---
+
+printf "\n${BOLD}Get started:${NC}\n"
+printf "  ${CYAN}cd your-project${NC}\n"
+printf "  ${CYAN}cook init${NC}                      # set up COOK.md and config\n"
+printf "  ${CYAN}cook \"Add dark mode\"${NC}            # let it cook\n\n"

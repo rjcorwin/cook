@@ -1,4 +1,4 @@
-module github.com/rjcorwin/arpi/cook
+module github.com/rjcorwin/cook/cook
 
 go 1.25.0
 
