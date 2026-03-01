@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
@@ -42,10 +43,10 @@ func ensureBaseImage(cli *client.Client) error {
 	}
 
 	logStep("Building sandbox image (first run)...")
-	return buildImage(cli, baseImageName, baseDockerfile)
+	return buildImage(cli, baseImageName, baseDockerfile, false)
 }
 
-func buildImage(cli *client.Client, imageName, dockerfile string) error {
+func buildImage(cli *client.Client, imageName, dockerfile string, verbose bool) error {
 	ctx := context.Background()
 
 	// Create tar archive with Dockerfile
@@ -74,8 +75,13 @@ func buildImage(cli *client.Client, imageName, dockerfile string) error {
 		return fmt.Errorf("building image %s: %w", imageName, err)
 	}
 	defer resp.Body.Close()
-	// Drain build output
-	io.Copy(io.Discard, resp.Body)
+	if verbose {
+		if err := jsonmessage.DisplayJSONMessagesStream(resp.Body, os.Stderr, 0, false, nil); err != nil {
+			return fmt.Errorf("building image %s: %w", imageName, err)
+		}
+	} else {
+		io.Copy(io.Discard, resp.Body)
+	}
 	logOK("Image %s built", imageName)
 	return nil
 }
@@ -104,7 +110,7 @@ func startSandbox(projectRoot string, cfg CookConfig) (*Sandbox, error) {
 		_, _, inspectErr := cli.ImageInspectWithRaw(ctx, projImage)
 		if inspectErr != nil {
 			logStep("Building project-specific sandbox image...")
-			if err := buildImage(cli, projImage, string(data)); err != nil {
+			if err := buildImage(cli, projImage, string(data), true); err != nil {
 				return nil, err
 			}
 		}
@@ -361,5 +367,5 @@ func rebuildBaseImage() error {
 	}
 
 	logStep("Building %s image...", baseImageName)
-	return buildImage(cli, baseImageName, baseDockerfile)
+	return buildImage(cli, baseImageName, baseDockerfile, false)
 }
