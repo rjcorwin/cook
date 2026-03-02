@@ -68,7 +68,7 @@ function StaticLine({ item, width }: { item: StaticItem; width: number }) {
 
 // --- ActiveFooter animations ---
 
-import type { AnimationStyle } from '../config.js'
+import type { AgentName, AnimationStyle } from '../config.js'
 
 function formatElapsed(secs: number): string {
   const m = Math.floor(secs / 60)
@@ -118,13 +118,14 @@ interface ActiveFooterProps {
   step: string
   iteration: number
   maxIterations: number
+  agent: AgentName
   model: string
   startTime: number
   logFile: string
   animation: AnimationStyle
 }
 
-function ActiveFooter({ step, iteration, maxIterations, model, startTime, logFile, animation }: ActiveFooterProps) {
+function ActiveFooter({ step, iteration, maxIterations, agent, model, startTime, logFile, animation }: ActiveFooterProps) {
   const [frame, setFrame] = useState(0)
 
   useEffect(() => {
@@ -136,7 +137,7 @@ function ActiveFooter({ step, iteration, maxIterations, model, startTime, logFil
 
   const elapsed = Math.floor((Date.now() - startTime) / 1000)
   const status = `${step} ${iteration}/${maxIterations}`
-  const info = `${status} | ${model} | ${formatElapsed(elapsed)} | ${logFile}`
+  const info = `${status} | ${agent}:${model} | ${formatElapsed(elapsed)} | ${logFile}`
   const f = Math.floor(frame / 3)
 
   switch (animation) {
@@ -203,13 +204,14 @@ interface LogStreamProps {
   step: string
   iteration: number
   maxIterations: number
+  agent: AgentName
   model: string
   startTime: number
   logFile: string
   animation: AnimationStyle
 }
 
-export function LogStream({ items, active, step, iteration, maxIterations, model, startTime, logFile, animation }: LogStreamProps) {
+export function LogStream({ items, active, step, iteration, maxIterations, agent, model, startTime, logFile, animation }: LogStreamProps) {
   const { stdout } = useStdout()
   const width = stdout?.columns ?? 80
 
@@ -227,6 +229,7 @@ export function LogStream({ items, active, step, iteration, maxIterations, model
           step={step}
           iteration={iteration}
           maxIterations={maxIterations}
+          agent={agent}
           model={model}
           startTime={startTime}
           logFile={logFile}

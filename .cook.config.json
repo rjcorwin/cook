@@ -3,5 +3,5 @@
     "mode": "default",
     "allowedHosts": []
   },
-  "env": []
+  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
 }

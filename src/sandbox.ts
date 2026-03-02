@@ -6,12 +6,12 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import type { CookConfig } from './config.js'
-import { logStep, logOK } from './log.js'
+import type { AgentName, CookConfig } from './config.js'
+import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
 
 const BASE_DOCKERFILE = `FROM node:22-slim
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai
 RUN apt-get update && apt-get install -y git iptables && rm -rf /var/lib/apt/lists/*
 `
 
@@ -143,12 +143,24 @@ async function copyFileToContainer(container: Docker.Container, hostPath: string
 
 async function copyAuthFiles(container: Docker.Container, userSpec: string): Promise<void> {
   await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.claude'])
+  await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.codex'])
+  await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.config/opencode'])
+  await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.local/share/opencode'])
 
   const home = os.homedir()
   await copyFileToContainer(container, path.join(home, '.claude.json'), '/home/cook/.claude.json')
   await copyFileToContainer(container, path.join(home, '.claude', '.credentials.json'), '/home/cook/.claude/.credentials.json')
+  await copyFileToContainer(container, path.join(home, '.codex', 'auth.json'), '/home/cook/.codex/auth.json')
+  await copyFileToContainer(container, path.join(home, '.codex', 'config.toml'), '/home/cook/.codex/config.toml')
+  await copyFileToContainer(container, path.join(home, '.config', 'opencode', 'opencode.json'), '/home/cook/.config/opencode/opencode.json')
+  await copyFileToContainer(container, path.join(home, '.local', 'share', 'opencode', 'auth.json'), '/home/cook/.local/share/opencode/auth.json')
 
   await containerExec(container, 'root', ['chown', '-R', userSpec, '/home/cook'])
+}
+
+function hasClaudeContainerCredentials(): boolean {
+  const home = os.homedir()
+  return fs.existsSync(path.join(home, '.claude', '.credentials.json'))
 }
 
 function gitConfig(key: string, fallback: string): string {
@@ -160,8 +172,24 @@ function gitConfig(key: string, fallback: string): string {
   }
 }
 
-function generateIptablesScript(allowedHosts: string[]): string {
-  const hosts = ['api.anthropic.com', ...allowedHosts]
+function requiredHostsForAgent(agent: AgentName): string[] {
+  switch (agent) {
+    case 'claude':
+      return ['api.anthropic.com']
+    case 'codex':
+      return ['api.openai.com']
+    case 'opencode':
+      // opencode can route to multiple providers depending on user config.
+      return ['api.openai.com', 'api.anthropic.com', 'api.opencode.ai']
+  }
+}
+
+function requiredHostsForAgents(agents: AgentName[]): string[] {
+  return [...new Set(agents.flatMap(requiredHostsForAgent))]
+}
+
+function generateIptablesScript(agents: AgentName[], allowedHosts: string[]): string {
+  const hosts = [...new Set([...requiredHostsForAgents(agents), ...allowedHosts])]
   const hostList = hosts.join(' ')
 
   return `set -e
@@ -180,9 +208,21 @@ for ip in $ALLOWED_IPS; do
 done`
 }
 
-async function runClaude(
+function runCommandForAgent(agent: AgentName, promptFile: string): string {
+  switch (agent) {
+    case 'claude':
+      return `claude --model "$COOK_MODEL" --dangerously-skip-permissions -p < /tmp/${promptFile}`
+    case 'codex':
+      return `codex exec --model "$COOK_MODEL" --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox - < /tmp/${promptFile}`
+    case 'opencode':
+      return `opencode run -m "$COOK_MODEL" "$(cat /tmp/${promptFile})"`
+  }
+}
+
+async function runAgent(
   container: Docker.Container,
   docker: Docker,
+  agent: AgentName,
   model: string,
   prompt: string,
   userSpec: string,
@@ -195,9 +235,11 @@ async function runClaude(
   const promptBuf = Buffer.from(prompt)
   const promptTar = createTarWithFile(promptFile, promptBuf)
   await container.putArchive(promptTar as NodeJS.ReadableStream, { path: '/tmp' })
+  await containerExec(container, 'root', ['chown', userSpec, `/tmp/${promptFile}`])
+  const agentCommand = runCommandForAgent(agent, promptFile)
 
   const exec = await container.exec({
-    Cmd: ['sh', '-c', `claude --model "$COOK_MODEL" --dangerously-skip-permissions -p < /tmp/${promptFile}; rc=$?; rm -f /tmp/${promptFile}; exit $rc`],
+    Cmd: ['sh', '-c', `${agentCommand}; rc=$?; rm -f /tmp/${promptFile}; exit $rc`],
     Env: [...env, 'HOME=/home/cook', `COOK_MODEL=${model}`],
     User: userSpec,
     WorkingDir: workingDir,
@@ -242,7 +284,10 @@ async function runClaude(
   const inspect = await exec.inspect()
   if (inspect.ExitCode !== 0) {
     const stderrText = Buffer.concat(stderrChunks).toString()
-    const err = new Error(`Claude exited ${inspect.ExitCode}: ${stderrText}`) as Error & { stdout: string }
+    const authHint = agent === 'claude' && stderrText.includes('Not logged in')
+      ? ' Claude auth is unavailable in-container. If host `claude auth status` is logged in but this still fails, run `claude setup-token` on host to generate portable CLI credentials.'
+      : ''
+    const err = new Error(`${agent} exited ${inspect.ExitCode}: ${stderrText}${authHint}`) as Error & { stdout: string }
     err.stdout = output
     throw err
   }
@@ -259,8 +304,8 @@ export class Sandbox {
     private projectRoot: string,
   ) {}
 
-  async runClaude(model: string, prompt: string, onLine: (line: string) => void): Promise<string> {
-    return runClaude(this.container, this.docker, model, prompt, this.userSpec, this.env, this.projectRoot, onLine)
+  async runAgent(agent: AgentName, model: string, prompt: string, onLine: (line: string) => void): Promise<string> {
+    return runAgent(this.container, this.docker, agent, model, prompt, this.userSpec, this.env, this.projectRoot, onLine)
   }
 
   async stop(): Promise<void> {
@@ -269,7 +314,7 @@ export class Sandbox {
   }
 }
 
-export async function startSandbox(docker: Docker, projectRoot: string, config: CookConfig): Promise<Sandbox> {
+export async function startSandbox(docker: Docker, projectRoot: string, config: CookConfig, agents: AgentName[]): Promise<Sandbox> {
   try {
     await docker.ping()
   } catch {
@@ -279,6 +324,9 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   await cleanupStaleContainers(docker, projectRoot)
   await ensureBaseImage(docker)
+  if (agents.includes('claude') && !hasClaudeContainerCredentials()) {
+    logWarn('Claude selected but ~/.claude/.credentials.json is missing on host. OAuth/keychain-only logins usually do not transfer to Linux containers; run `claude setup-token` on host.')
+  }
 
   const projImage = getProjectImageTag(projectRoot)
   let imageName = BASE_IMAGE_NAME
@@ -316,7 +364,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
     Labels: { 'cook.project': projectRoot },
     HostConfig: {
       Binds: [`${projectRoot}:${projectRoot}`],
-      CapAdd: config.network.mode === 'restricted' ? ['NET_ADMIN'] : [],
+      CapAdd: config.network.mode !== 'unrestricted' ? ['NET_ADMIN'] : [],
     },
   })
 
@@ -332,11 +380,11 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   await copyAuthFiles(container, userSpec)
 
-  if (config.network.mode === 'restricted') {
+  if (config.network.mode !== 'unrestricted') {
     logStep('Applying network restrictions...')
-    const script = generateIptablesScript(config.network.allowedHosts)
+    const script = generateIptablesScript(agents, config.network.allowedHosts)
     await containerExec(container, 'root', ['sh', '-c', script])
-    const allHosts = ['api.anthropic.com', ...config.network.allowedHosts]
+    const allHosts = [...new Set([...requiredHostsForAgents(agents), ...config.network.allowedHosts])]
     logOK(`Network restricted to: ${allHosts.join(', ')}`)
   }
 
