@@ -1,6 +1,34 @@
 # cook
 
-A sandboxed multi-agent loop (Claude, Codex, or OpenCode). Runs work-review-gate iterations inside a Docker container so the AI can operate with full autonomy while your host stays safe.
+Do you often find yourself in this loop?
+
+```
+You:   Hey Agent, implement dark mode.
+Agent: Done! I added the thing.
+
+You:   Hey Agent, review your work.
+Agent: Found a few issues.
+
+You:   Hey Agent, fix your work.
+Agent: Fixed! 
+```
+
+Issue the task once and __let it cook__:
+
+```sh
+cook "Implement dark mode"
+```
+
+
+`cook` runs a sandboxed work → review → gate loop, iterating automatically until the agent is satisfied or your max iterations are hit. Get even fancier by defining what to review and the criteria for done:
+
+```sh
+cook "Implement dark mode" \
+  --review "Review the implementation. Check for visual regressions and missing theme variables. Categorize findings by High/Medium/Low." \
+  --gate "Reply DONE if no High findings remain; otherwise ITERATE." \
+  --max-iterations 5
+```
+
 
 ## Prerequisites
 
@@ -31,15 +59,6 @@ Basic run:
 cook "Create a space cat themed todo app in a single index.html"
 ```
 
-Custom prompts + max iterations:
-
-```sh
-cook "Implement dark mode" \
-     "Review the implementation. Categorize findings by High/Medium/Low." \
-     "Reply DONE if no High findings remain; otherwise ITERATE." \
-     5
-```
-
 Per-step agent/model overrides (for one run):
 
 ```sh
@@ -59,11 +78,38 @@ cook doctor --work-agent codex --review-agent claude
 
 1. **Work** — The selected agent executes your prompt inside a Docker sandbox with the project bind-mounted.
 2. **Review** — A second pass reviews what changed and flags issues by severity.
-3. **Gate** — A third pass decides PROCEED or ITERATE based on the review.
+3. **Gate** — A third pass decides DONE or ITERATE based on the review.
 
-The loop repeats until the gate says PROCEED or max iterations are reached (default: 3).
+The loop repeats until the gate says DONE or max iterations are reached (default: 3).
 
 A persistent status bar at the bottom of the terminal shows the current step, iteration, model, and elapsed time.
+
+## Sandbox security
+
+The agent runs inside a Docker container — it can freely read and write your project files, but it cannot touch anything else on your host machine.
+
+Network access is restricted by default using `iptables` inside the container. Only outbound HTTPS to the agent's API endpoint is allowed (e.g. `api.anthropic.com` for Claude). Everything else — including Google, npm, GitHub, etc. — is blocked unless explicitly added to `allowedHosts`.
+
+To allow additional hosts:
+
+```json
+{
+  "network": {
+    "mode": "restricted",
+    "allowedHosts": ["registry.npmjs.org", "api.github.com"]
+  }
+}
+```
+
+To disable restrictions entirely (not recommended):
+
+```json
+{
+  "network": {
+    "mode": "unrestricted"
+  }
+}
+```
 
 ## Configuration
 
@@ -89,7 +135,7 @@ Example `.cook.config.json`:
     "gate": {}
   },
   "network": {
-    "mode": "default",
+    "mode": "restricted",
     "allowedHosts": []
   },
   "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
