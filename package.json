@@ -1,0 +1,30 @@
+{
+  "name": "@rjcorwin/cook",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "cook": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.9",
+    "ink": "^6.0.0",
+    "react": "^19.0.0",
+    "tar-stream": "^3.1.7"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.31",
+    "@types/tar-stream": "^3.1.3",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.8.0",
+    "tsup": "^8.0.0"
+  }
+}
