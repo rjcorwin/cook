@@ -16,56 +16,50 @@ const STEP_COLORS: Record<string, string> = {
   gate: 'blue',
 }
 
-// --- Box-drawing helpers ---
+// --- Helpers ---
 
-function sectionColor(step: string): string {
+function stepColor(step: string): string {
   return STEP_COLORS[step] ?? 'white'
 }
 
-function renderSectionHeader(step: string, iteration: number, width: number): string {
+function renderSeparator(step: string, iteration: number, width: number): string {
   const label = ` ${step} (iteration ${iteration}) `
-  const pad = Math.max(0, width - label.length - 3)
-  return `┌─${label}${'─'.repeat(pad)}`
-}
-
-function renderSectionClose(width: number): string {
-  return `└${'─'.repeat(Math.max(0, width - 2))}`
-}
-
-function renderResponseLine(text: string): string {
-  return `│ ${text}`
+  const side = Math.max(0, Math.floor((width - label.length) / 2))
+  const extra = (width - label.length) % 2
+  return `${'━'.repeat(side)}${label}${'━'.repeat(side + extra)}`
 }
 
 // --- StaticLine component ---
 
 function StaticLine({ item, width }: { item: StaticItem; width: number }) {
-  const color = sectionColor(item.step)
+  const color = stepColor(item.step)
 
   switch (item.type) {
     case 'section-header':
-      return <Text color={color} bold>{renderSectionHeader(item.step, item.iteration, width)}</Text>
+      return (
+        <Box flexDirection="column">
+          <Text>{' '}</Text>
+          <Text color={color} bold>{renderSeparator(item.step, item.iteration, width)}</Text>
+        </Box>
+      )
 
     case 'request': {
       const lines = item.text.split('\n')
-      const innerWidth = Math.max(0, width - 5)
-      const headerLine = `│ ┌─ request ${'─'.repeat(Math.max(0, innerWidth - 10))}`
-      const closeLine = `│ └${'─'.repeat(Math.max(0, innerWidth))}`
       return (
-        <Box flexDirection="column">
-          <Text color="yellow">{headerLine}</Text>
-          {lines.map((line, i) => (
-            <Text key={i} color="yellow">{`│ │ ${line}`}</Text>
+        <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
+          <Text color="gray">{`▌ ${lines[0]}`}</Text>
+          {lines.slice(1).map((line, i) => (
+            <Text key={i} color="gray">{`  ${line}`}</Text>
           ))}
-          <Text color="yellow">{closeLine}</Text>
         </Box>
       )
     }
 
     case 'line':
-      return <Text color="magenta">{renderResponseLine(item.text)}</Text>
+      return <Text>{item.text}</Text>
 
     case 'section-close':
-      return <Text color={color}>{renderSectionClose(width)}</Text>
+      return null
 
     case 'done':
       return <Text color="green" bold>{`✓ Done`}</Text>
@@ -105,7 +99,11 @@ function ActiveFooter({ step, iteration, maxIterations, model, startTime, logFil
   const status = `${step} ${iteration}/${maxIterations}`
   const line = `${SPINNER_FRAMES[frame]} ${status} | ${model} | ${formatElapsed(elapsed)} | ${logFile}`
 
-  return <Text color="cyan">{line}</Text>
+  return (
+    <Box borderStyle="single" borderColor="cyan">
+      <Text color="cyan">{line}</Text>
+    </Box>
+  )
 }
 
 // --- LogStream ---
