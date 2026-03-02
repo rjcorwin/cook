@@ -4,7 +4,7 @@ import { Static, Box, Text } from 'ink'
 export interface Section {
   step: string
   iteration: number
-  prompt: string | null
+  request: string | null
   lines: string[]
 }
 
@@ -14,22 +14,27 @@ const STEP_COLORS: Record<string, string> = {
   gate: 'blue',
 }
 
-function SectionBox({ section, showPrompt }: { section: Section; showPrompt: boolean }) {
+function SectionBox({ section, showRequest }: { section: Section; showRequest: boolean }) {
   const color = STEP_COLORS[section.step] ?? 'white'
   const label = `${section.step} (iteration ${section.iteration})`
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={color} paddingX={1}>
       <Text bold color={color}>{label}</Text>
-      {showPrompt && section.prompt && (
-        <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginY={1}>
-          <Text bold color="yellow">prompt</Text>
-          <Text>{section.prompt}</Text>
+      {showRequest && section.request && (
+        <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginTop={1}>
+          <Text bold color="yellow">request</Text>
+          <Text>{section.request}</Text>
         </Box>
       )}
-      {section.lines.map((line, i) => (
-        <Text key={i}>{line}</Text>
-      ))}
+      {section.lines.length > 0 && (
+        <Box flexDirection="column" borderStyle="single" borderColor="magenta" paddingX={1} marginTop={1}>
+          <Text bold color="magenta">response</Text>
+          {section.lines.map((line, i) => (
+            <Text key={i}>{line}</Text>
+          ))}
+        </Box>
+      )}
     </Box>
   )
 }
@@ -37,21 +42,21 @@ function SectionBox({ section, showPrompt }: { section: Section; showPrompt: boo
 interface LogStreamProps {
   completedSections: Section[]
   currentSection: Section | null
-  showPrompt: boolean
+  showRequest: boolean
 }
 
-export function LogStream({ completedSections, currentSection, showPrompt }: LogStreamProps) {
+export function LogStream({ completedSections, currentSection, showRequest }: LogStreamProps) {
   return (
     <>
       <Static items={completedSections}>
         {(section, index) => (
           <Box key={index}>
-            <SectionBox section={section} showPrompt={showPrompt} />
+            <SectionBox section={section} showRequest={showRequest} />
           </Box>
         )}
       </Static>
-      {currentSection && currentSection.lines.length > 0 && (
-        <SectionBox section={currentSection} showPrompt={showPrompt} />
+      {currentSection && (
+        <SectionBox section={currentSection} showRequest={showRequest} />
       )}
     </>
   )
