@@ -1,8 +1,4 @@
-# COOK.md
-
-## Project Instructions
-
-[Edit this section with your project's conventions, coding standards, etc.]
+We're working in a work->review->gate loop.
 
 ## Agent Loop
 
