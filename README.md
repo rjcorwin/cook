@@ -23,6 +23,19 @@ cook "Add dark mode"           # runs the agent loop
 cook "Fix the login bug" 5     # run with up to 5 iterations
 ```
 
+## Example
+
+Build a space cat themed todo app from scratch with code review:
+
+```sh
+cook "Create a space cat themed todo app in a single index.html" \
+     "Plz code review. Split issues into high/medium/low." \
+     "Say DONE if all high and medium issues are addressed, else say ITERATE and describe the work that needs to be done" \
+     5
+```
+
+The four arguments map to: **work** prompt, **review** prompt, **gate** prompt, and **max iterations**. Cook will iterate until the gate says DONE or max iterations are reached.
+
 ## How it works
 
 1. **Work** — Claude executes your prompt inside a Docker sandbox with the project bind-mounted.
