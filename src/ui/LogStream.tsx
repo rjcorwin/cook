@@ -66,15 +66,53 @@ function StaticLine({ item, width }: { item: StaticItem; width: number }) {
   }
 }
 
-// --- ActiveFooter (spinner + status) ---
+// --- ActiveFooter animations ---
 
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+import type { AnimationStyle } from '../config.js'
 
 function formatElapsed(secs: number): string {
   const m = Math.floor(secs / 60)
   const s = secs % 60
   return m > 0 ? `${m}m${s}s` : `${s}s`
 }
+
+// flame
+const FLAME_CHARS = [')', '}', ')', ']', '>', '}']
+const FLAME_COLORS = ['red', 'yellow', '#ff8c00', 'red', 'yellow', '#ff8c00']
+
+// strip
+const STRIP_CHARS = ['░', '▒', '▓', '█', '▓', '▒', '░', ' ']
+const STRIP_COLORS = ['yellow', '#ff8c00', 'red', 'red', 'red', '#ff8c00', 'yellow', 'white']
+
+function flameStrip(frame: number): Array<{ char: string; color: string }> {
+  const len = STRIP_CHARS.length
+  return Array.from({ length: 7 }, (_, i) => {
+    const idx = (frame + i) % len
+    return { char: STRIP_CHARS[idx], color: STRIP_COLORS[idx] }
+  })
+}
+
+// campfire
+const FIRE_FRAMES = [
+  ['   (    )  ', '    )  (   ', ' ─=≡════≡=─'],
+  ['    )  (   ', '   (    )  ', ' ─=≡════≡=─'],
+  ['  (   )    ', '    (   )  ', ' ─=≡════≡=─'],
+  ['    ) (    ', '  )    (   ', ' ─=≡════≡=─'],
+]
+const FIRE_LINE_COLORS = ['yellow', '#ff8c00', 'gray']
+
+// pot
+const STEAM_FRAMES = [
+  ' ~  ~  ~ ',
+  '  ~  ~  ~',
+  ' ~  ~   ~',
+  '  ~ ~  ~ ',
+  '~  ~  ~  ',
+  ' ~   ~ ~ ',
+]
+
+// pulse
+const PULSE_COLORS = ['red', '#ff8c00', 'yellow', '#ff8c00', 'red', '#cc0000']
 
 interface ActiveFooterProps {
   step: string
@@ -83,27 +121,78 @@ interface ActiveFooterProps {
   model: string
   startTime: number
   logFile: string
+  animation: AnimationStyle
 }
 
-function ActiveFooter({ step, iteration, maxIterations, model, startTime, logFile }: ActiveFooterProps) {
+function ActiveFooter({ step, iteration, maxIterations, model, startTime, logFile, animation }: ActiveFooterProps) {
   const [frame, setFrame] = useState(0)
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setFrame(f => (f + 1) % SPINNER_FRAMES.length)
+      setFrame(f => f + 1)
     }, 80)
     return () => clearInterval(timer)
   }, [])
 
   const elapsed = Math.floor((Date.now() - startTime) / 1000)
   const status = `${step} ${iteration}/${maxIterations}`
-  const line = `${SPINNER_FRAMES[frame]} ${status} | ${model} | ${formatElapsed(elapsed)} | ${logFile}`
+  const info = `${status} | ${model} | ${formatElapsed(elapsed)} | ${logFile}`
+  const f = Math.floor(frame / 3)
 
-  return (
-    <Box borderStyle="single" borderColor="cyan">
-      <Text color="cyan">{line}</Text>
-    </Box>
-  )
+  switch (animation) {
+    case 'flame': {
+      const idx = f % FLAME_CHARS.length
+      return (
+        <Box borderStyle="single" borderColor="#ff8c00">
+          <Text color={FLAME_COLORS[idx]}>{FLAME_CHARS[idx]}</Text>
+          <Text color="#ff8c00">{` ${info}`}</Text>
+        </Box>
+      )
+    }
+
+    case 'strip': {
+      const strip = flameStrip(f)
+      return (
+        <Box borderStyle="single" borderColor="#ff8c00">
+          {strip.map((s, i) => (
+            <Text key={i} color={s.color}>{s.char}</Text>
+          ))}
+          <Text color="#ff8c00">{`  ${info}`}</Text>
+        </Box>
+      )
+    }
+
+    case 'campfire': {
+      const fire = FIRE_FRAMES[f % FIRE_FRAMES.length]
+      return (
+        <Box flexDirection="column" borderStyle="single" borderColor="#ff8c00">
+          {fire.map((line, i) => (
+            <Text key={i} color={FIRE_LINE_COLORS[i]}>{line}</Text>
+          ))}
+          <Text color="#ff8c00">{info}</Text>
+        </Box>
+      )
+    }
+
+    case 'pot': {
+      const steam = STEAM_FRAMES[f % STEAM_FRAMES.length]
+      return (
+        <Box flexDirection="column" borderStyle="single" borderColor="#ff8c00">
+          <Text color="gray">{steam}</Text>
+          <Text color="#ff8c00">{`╰──────╯  ${info}`}</Text>
+        </Box>
+      )
+    }
+
+    case 'pulse': {
+      const c = PULSE_COLORS[f % PULSE_COLORS.length]
+      return (
+        <Box borderStyle="single" borderColor={c}>
+          <Text color={c}>{`🔥 ${info}`}</Text>
+        </Box>
+      )
+    }
+  }
 }
 
 // --- LogStream ---
@@ -117,9 +206,10 @@ interface LogStreamProps {
   model: string
   startTime: number
   logFile: string
+  animation: AnimationStyle
 }
 
-export function LogStream({ items, active, step, iteration, maxIterations, model, startTime, logFile }: LogStreamProps) {
+export function LogStream({ items, active, step, iteration, maxIterations, model, startTime, logFile, animation }: LogStreamProps) {
   const { stdout } = useStdout()
   const width = stdout?.columns ?? 80
 
@@ -140,6 +230,7 @@ export function LogStream({ items, active, step, iteration, maxIterations, model
           model={model}
           startTime={startTime}
           logFile={logFile}
+          animation={animation}
         />
       )}
     </Box>

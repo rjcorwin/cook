@@ -193,10 +193,23 @@ async function runLoop(args: string[]): Promise<void> {
 
   const config = loadConfig(projectRoot)
 
-  console.error(`${BOLD}cook${RESET} — agent loop`)
-  console.error(`  Model:      ${parsed.model}`)
-  console.error(`  Iterations: ${parsed.maxIterations}`)
-  console.error(`  Project:    ${projectRoot}`)
+  const bannerLines = [
+    `${BOLD}cook${RESET} — agent loop`,
+    ``,
+    `  Model:       ${parsed.model}`,
+    `  Iterations:  ${parsed.maxIterations}`,
+    `  Project:     ${projectRoot}`,
+  ]
+  const maxLen = Math.max(...bannerLines.map(l => l.replace(/\x1b\[[0-9;]*m/g, '').length))
+  const pad = (line: string) => {
+    const visible = line.replace(/\x1b\[[0-9;]*m/g, '').length
+    return line + ' '.repeat(Math.max(0, maxLen - visible))
+  }
+  console.error(`┌─${'─'.repeat(maxLen)}─┐`)
+  for (const line of bannerLines) {
+    console.error(`│ ${pad(line)} │`)
+  }
+  console.error(`└─${'─'.repeat(maxLen)}─┘`)
 
   const docker = new Docker()
   try {
@@ -209,7 +222,7 @@ async function runLoop(args: string[]): Promise<void> {
   try {
     const cookMD = loadCookMD(projectRoot)
     const { unmount, waitUntilExit } = render(
-      React.createElement(App, { maxIterations: parsed.maxIterations, model: parsed.model, showRequest: parsed.showRequest }),
+      React.createElement(App, { maxIterations: parsed.maxIterations, model: parsed.model, showRequest: parsed.showRequest, animation: config.animation }),
       { exitOnCtrlC: false }
     )
     inkInstance = { unmount }

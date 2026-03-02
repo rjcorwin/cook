@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text, useApp } from 'ink'
 import { LogStream, type StaticItem } from './LogStream.js'
+import type { AnimationStyle } from '../config.js'
 import { loopEvents } from '../loop.js'
 
 interface AppState {
@@ -19,9 +20,10 @@ interface AppProps {
   maxIterations: number
   model: string
   showRequest: boolean
+  animation: AnimationStyle
 }
 
-export function App({ maxIterations, model, showRequest }: AppProps) {
+export function App({ maxIterations, model, showRequest, animation }: AppProps) {
   const { exit } = useApp()
   const nextId = useRef(0)
   const itemsRef = useRef<StaticItem[]>([])
@@ -114,6 +116,7 @@ export function App({ maxIterations, model, showRequest }: AppProps) {
         model={state.model}
         startTime={state.startTime}
         logFile={state.logFile}
+        animation={animation}
       />
 
       {state.error && (
