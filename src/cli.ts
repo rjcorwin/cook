@@ -88,6 +88,7 @@ ${BOLD}Options:${RESET}
   --gate PROMPT                   Override gate step prompt
   --max-iterations N              Max review iterations (default: 3)
   --model MODEL                   Claude model (default: opus)
+  --show-prompt                   Show the templated prompt for each step
   -h, --help                      Show this help`)
   process.exit(1)
 }
@@ -134,6 +135,7 @@ interface ParsedArgs {
   gatePrompt: string
   maxIterations: number
   model: string
+  showPrompt: boolean
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -176,8 +178,9 @@ function parseArgs(args: string[]): ParsedArgs {
   const reviewPrompt = flags['--review'] ?? prompts[1] ?? DEFAULT_REVIEW_PROMPT
   const gatePrompt = flags['--gate'] ?? prompts[2] ?? DEFAULT_GATE_PROMPT
   const model = flags['--model'] ?? 'opus'
+  const showPrompt = flags['--show-prompt'] === 'true'
 
-  return { workPrompt, reviewPrompt, gatePrompt, maxIterations, model }
+  return { workPrompt, reviewPrompt, gatePrompt, maxIterations, model, showPrompt }
 }
 
 async function runLoop(args: string[]): Promise<void> {
@@ -206,7 +209,7 @@ async function runLoop(args: string[]): Promise<void> {
   try {
     const cookMD = loadCookMD(projectRoot)
     const { unmount, waitUntilExit } = render(
-      React.createElement(App, { maxIterations: parsed.maxIterations, model: parsed.model }),
+      React.createElement(App, { maxIterations: parsed.maxIterations, model: parsed.model, showPrompt: parsed.showPrompt }),
       { exitOnCtrlC: false }
     )
     inkInstance = { unmount }

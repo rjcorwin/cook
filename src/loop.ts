@@ -58,6 +58,7 @@ export async function agentLoop(
           logFile,
         })
 
+        events.emit('prompt', prompt)
         output = await sandbox.runClaude(config.model, prompt, (line) => {
           events.emit('line', line)
         })

@@ -20,9 +20,10 @@ interface AppState {
 interface AppProps {
   maxIterations: number
   model: string
+  showPrompt: boolean
 }
 
-export function App({ maxIterations, model }: AppProps) {
+export function App({ maxIterations, model, showPrompt }: AppProps) {
   const { exit } = useApp()
 
   const [state, setState] = useState<AppState>({
@@ -52,7 +53,15 @@ export function App({ maxIterations, model }: AppProps) {
           step,
           iteration,
           completedSections: completed,
-          currentSection: { step, iteration, lines: [] },
+          currentSection: { step, iteration, prompt: null, lines: [] },
+        }
+      })
+    const onPrompt = (prompt: string) =>
+      setState(s => {
+        if (!s.currentSection) return s
+        return {
+          ...s,
+          currentSection: { ...s.currentSection, prompt },
         }
       })
     const onLine = (line: string) =>
@@ -76,6 +85,7 @@ export function App({ maxIterations, model }: AppProps) {
 
     loopEvents.on('logFile', onLogFile)
     loopEvents.on('step', onStep)
+    loopEvents.on('prompt', onPrompt)
     loopEvents.on('line', onLine)
     loopEvents.on('done', onDone)
     loopEvents.on('error', onError)
@@ -83,6 +93,7 @@ export function App({ maxIterations, model }: AppProps) {
     return () => {
       loopEvents.off('logFile', onLogFile)
       loopEvents.off('step', onStep)
+      loopEvents.off('prompt', onPrompt)
       loopEvents.off('line', onLine)
       loopEvents.off('done', onDone)
       loopEvents.off('error', onError)
@@ -105,6 +116,7 @@ export function App({ maxIterations, model }: AppProps) {
       <LogStream
         completedSections={state.completedSections}
         currentSection={state.currentSection}
+        showPrompt={showPrompt}
       />
 
       {state.error && (
