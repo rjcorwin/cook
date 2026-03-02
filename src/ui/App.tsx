@@ -39,8 +39,6 @@ export function App({ maxIterations, model, showRequest }: AppProps) {
     error: null,
   })
 
-  const [elapsed, setElapsed] = useState(0)
-
   useEffect(() => {
     const onLogFile = (logFile: string) => setState(s => ({ ...s, logFile }))
     const onStep = ({ step, iteration }: { step: string; iteration: number }) =>
@@ -104,12 +102,7 @@ export function App({ maxIterations, model, showRequest }: AppProps) {
     if (state.done || state.error) exit()
   }, [state.done, state.error, exit])
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - state.startTime) / 1000))
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [state.startTime])
+  const elapsed = Math.floor((Date.now() - state.startTime) / 1000)
 
   return (
     <Box flexDirection="column" height="100%">
