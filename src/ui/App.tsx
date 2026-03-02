@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, useApp } from 'ink'
-import { LogStream } from './LogStream.js'
+import { LogStream, type Section } from './LogStream.js'
 import { StatusBar } from './StatusBar.js'
 import { loopEvents } from '../loop.js'
 
@@ -11,7 +11,8 @@ interface AppState {
   model: string
   startTime: number
   logFile: string
-  logLines: string[]
+  completedSections: Section[]
+  currentSection: Section | null
   done: boolean
   error: string | null
 }
@@ -31,7 +32,8 @@ export function App({ maxIterations, model }: AppProps) {
     model,
     startTime: Date.now(),
     logFile: '',
-    logLines: [],
+    completedSections: [],
+    currentSection: null,
     done: false,
     error: null,
   })
@@ -41,10 +43,35 @@ export function App({ maxIterations, model }: AppProps) {
   useEffect(() => {
     const onLogFile = (logFile: string) => setState(s => ({ ...s, logFile }))
     const onStep = ({ step, iteration }: { step: string; iteration: number }) =>
-      setState(s => ({ ...s, step, iteration }))
+      setState(s => {
+        const completed = s.currentSection
+          ? [...s.completedSections, s.currentSection]
+          : s.completedSections
+        return {
+          ...s,
+          step,
+          iteration,
+          completedSections: completed,
+          currentSection: { step, iteration, lines: [] },
+        }
+      })
     const onLine = (line: string) =>
-      setState(s => ({ ...s, logLines: [...s.logLines, line] }))
-    const onDone = () => setState(s => ({ ...s, done: true }))
+      setState(s => {
+        if (!s.currentSection) return s
+        return {
+          ...s,
+          currentSection: {
+            ...s.currentSection,
+            lines: [...s.currentSection.lines, line],
+          },
+        }
+      })
+    const onDone = () => setState(s => {
+      const completed = s.currentSection
+        ? [...s.completedSections, s.currentSection]
+        : s.completedSections
+      return { ...s, completedSections: completed, currentSection: null, done: true }
+    })
     const onError = (err: string) => setState(s => ({ ...s, error: err }))
 
     loopEvents.on('logFile', onLogFile)
@@ -75,7 +102,10 @@ export function App({ maxIterations, model }: AppProps) {
 
   return (
     <Box flexDirection="column" height="100%">
-      <LogStream lines={state.logLines} />
+      <LogStream
+        completedSections={state.completedSections}
+        currentSection={state.currentSection}
+      />
 
       {state.error && (
         <Box marginTop={1}>
