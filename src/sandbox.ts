@@ -7,7 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import type { AgentName, CookConfig } from './config.js'
-import { logStep, logOK } from './log.js'
+import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
 
 const BASE_DOCKERFILE = `FROM node:22-slim
@@ -158,6 +158,11 @@ async function copyAuthFiles(container: Docker.Container, userSpec: string): Pro
   await containerExec(container, 'root', ['chown', '-R', userSpec, '/home/cook'])
 }
 
+function hasClaudeContainerCredentials(): boolean {
+  const home = os.homedir()
+  return fs.existsSync(path.join(home, '.claude', '.credentials.json'))
+}
+
 function gitConfig(key: string, fallback: string): string {
   try {
     const out = execSync(`git config ${key}`, { encoding: 'utf8' }).trim()
@@ -179,8 +184,12 @@ function requiredHostsForAgent(agent: AgentName): string[] {
   }
 }
 
-function generateIptablesScript(agent: AgentName, allowedHosts: string[]): string {
-  const hosts = [...new Set([...requiredHostsForAgent(agent), ...allowedHosts])]
+function requiredHostsForAgents(agents: AgentName[]): string[] {
+  return [...new Set(agents.flatMap(requiredHostsForAgent))]
+}
+
+function generateIptablesScript(agents: AgentName[], allowedHosts: string[]): string {
+  const hosts = [...new Set([...requiredHostsForAgents(agents), ...allowedHosts])]
   const hostList = hosts.join(' ')
 
   return `set -e
@@ -226,6 +235,7 @@ async function runAgent(
   const promptBuf = Buffer.from(prompt)
   const promptTar = createTarWithFile(promptFile, promptBuf)
   await container.putArchive(promptTar as NodeJS.ReadableStream, { path: '/tmp' })
+  await containerExec(container, 'root', ['chown', userSpec, `/tmp/${promptFile}`])
   const agentCommand = runCommandForAgent(agent, promptFile)
 
   const exec = await container.exec({
@@ -274,7 +284,10 @@ async function runAgent(
   const inspect = await exec.inspect()
   if (inspect.ExitCode !== 0) {
     const stderrText = Buffer.concat(stderrChunks).toString()
-    const err = new Error(`${agent} exited ${inspect.ExitCode}: ${stderrText}`) as Error & { stdout: string }
+    const authHint = agent === 'claude' && stderrText.includes('Not logged in')
+      ? ' Claude auth is unavailable in-container. If host `claude auth status` is logged in but this still fails, run `claude setup-token` on host to generate portable CLI credentials.'
+      : ''
+    const err = new Error(`${agent} exited ${inspect.ExitCode}: ${stderrText}${authHint}`) as Error & { stdout: string }
     err.stdout = output
     throw err
   }
@@ -301,7 +314,7 @@ export class Sandbox {
   }
 }
 
-export async function startSandbox(docker: Docker, projectRoot: string, config: CookConfig, agent: AgentName): Promise<Sandbox> {
+export async function startSandbox(docker: Docker, projectRoot: string, config: CookConfig, agents: AgentName[]): Promise<Sandbox> {
   try {
     await docker.ping()
   } catch {
@@ -311,6 +324,9 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   await cleanupStaleContainers(docker, projectRoot)
   await ensureBaseImage(docker)
+  if (agents.includes('claude') && !hasClaudeContainerCredentials()) {
+    logWarn('Claude selected but ~/.claude/.credentials.json is missing on host. OAuth/keychain-only logins usually do not transfer to Linux containers; run `claude setup-token` on host.')
+  }
 
   const projImage = getProjectImageTag(projectRoot)
   let imageName = BASE_IMAGE_NAME
@@ -366,9 +382,9 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   if (config.network.mode === 'restricted') {
     logStep('Applying network restrictions...')
-    const script = generateIptablesScript(agent, config.network.allowedHosts)
+    const script = generateIptablesScript(agents, config.network.allowedHosts)
     await containerExec(container, 'root', ['sh', '-c', script])
-    const allHosts = [...new Set([...requiredHostsForAgent(agent), ...config.network.allowedHosts])]
+    const allHosts = [...new Set([...requiredHostsForAgents(agents), ...config.network.allowedHosts])]
     logOK(`Network restricted to: ${allHosts.join(', ')}`)
   }
 

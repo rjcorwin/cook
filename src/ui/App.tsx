@@ -48,13 +48,13 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
 
     const onLogFile = (logFile: string) => setState(s => ({ ...s, logFile }))
 
-    const onStep = ({ step, iteration }: { step: string; iteration: number }) =>
+    const onStep = ({ step, iteration, agent, model }: { step: string; iteration: number; agent: AgentName; model: string }) =>
       setState(s => {
         if (s.active) {
           itemsRef.current.push({ id: getId(), type: 'section-close', step: s.step })
         }
         itemsRef.current.push({ id: getId(), type: 'section-header', step, iteration })
-        return { ...s, step, iteration, active: true }
+        return { ...s, step, iteration, agent, model, active: true }
       })
 
     const onPrompt = (prompt: string) =>

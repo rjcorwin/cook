@@ -48,14 +48,26 @@ A persistent status bar at the bottom of the terminal shows the current step, it
 ## Configuration
 
 - `COOK.md` — Project instructions and agent loop template (JS template literal syntax).
-- `.cook.config.json` — Default agent, network restrictions, and environment variable passthrough.
+- `.cook.config.json` — Default agent/model, per-step agent/model overrides, network restrictions, and environment variable passthrough.
 - `.cook.Dockerfile` — Project-specific dependencies layered on top of the base sandbox image.
 
 Example `.cook.config.json`:
 
 ```json
 {
-  "agent": "codex",
+  "agent": "opencode",
+  "model": "gpt-5",
+  "steps": {
+    "work": {
+      "agent": "codex",
+      "model": "gpt-5-codex"
+    },
+    "review": {
+      "agent": "claude",
+      "model": "opus"
+    },
+    "gate": {}
+  },
   "network": {
     "mode": "default",
     "allowedHosts": []
@@ -64,7 +76,7 @@ Example `.cook.config.json`:
 }
 ```
 
-CLI `--agent` overrides the config default for a single run.
+CLI defaults (`--agent`, `--model`) override config defaults for a single run. Step flags (`--work-agent`, `--review-agent`, `--gate-agent`, `--work-model`, `--review-model`, `--gate-model`) override both.
 
 ## Options
 
@@ -73,11 +85,18 @@ cook "prompt"                   Run the work/review/gate loop
 cook "prompt" 5                 Run with 5 max iterations
 cook init                       Set up COOK.md, config, and Dockerfile
 cook rebuild                    Rebuild the sandbox Docker image
+cook doctor                     Check Docker + auth readiness
 
 --work PROMPT                   Override work step prompt
 --review PROMPT                 Override review step prompt
 --gate PROMPT                   Override gate step prompt
 --max-iterations N              Max review iterations (default: 3)
---agent AGENT                   Agent to run (claude|codex|opencode)
---model MODEL                   Agent model (default depends on agent)
+--agent AGENT                   Default agent (claude|codex|opencode)
+--model MODEL                   Default model (for default agent)
+--work-agent AGENT              Work step agent override
+--review-agent AGENT            Review step agent override
+--gate-agent AGENT              Gate step agent override
+--work-model MODEL              Work step model override
+--review-model MODEL            Review step model override
+--gate-model MODEL              Gate step model override
 ```

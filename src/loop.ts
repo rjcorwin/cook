@@ -2,15 +2,19 @@ import { EventEmitter } from 'events'
 import type { Sandbox } from './sandbox.js'
 import { renderTemplate, type LoopContext } from './template.js'
 import { createSessionLog, appendToLog, logOK, logWarn } from './log.js'
-import type { AgentName } from './config.js'
+import type { AgentName, StepName } from './config.js'
+
+interface LoopStepConfig {
+  agent: AgentName
+  model: string
+}
 
 export interface LoopConfig {
   workPrompt: string
   reviewPrompt: string
   gatePrompt: string
+  steps: Record<StepName, LoopStepConfig>
   maxIterations: number
-  model: string
-  agent: AgentName
   projectRoot: string
 }
 
@@ -41,13 +45,18 @@ export async function agentLoop(
 
   for (let i = 1; i <= config.maxIterations; i++) {
     const steps = [
-      { name: 'work', prompt: config.workPrompt },
-      { name: 'review', prompt: config.reviewPrompt },
-      { name: 'gate', prompt: config.gatePrompt },
+      { name: 'work' as const, prompt: config.workPrompt },
+      { name: 'review' as const, prompt: config.reviewPrompt },
+      { name: 'gate' as const, prompt: config.gatePrompt },
     ]
 
     for (const step of steps) {
-      events.emit('step', { step: step.name, iteration: i })
+      events.emit('step', {
+        step: step.name,
+        iteration: i,
+        agent: config.steps[step.name].agent,
+        model: config.steps[step.name].model,
+      })
 
       let output: string
       try {
@@ -61,7 +70,7 @@ export async function agentLoop(
         })
 
         events.emit('prompt', prompt)
-        output = await sandbox.runAgent(config.agent, config.model, prompt, (line) => {
+        output = await sandbox.runAgent(config.steps[step.name].agent, config.steps[step.name].model, prompt, (line) => {
           events.emit('line', line)
         })
       } catch (err) {
