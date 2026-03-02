@@ -20,7 +20,7 @@ cook "Implement dark mode"
 ```
 
 
-`cook` runs a sandboxed work → review → gate loop, iterating automatically until the agent is satisfied or your max iterations are hit. Get even fancier by defining what to review and the criteria for done:
+`cook` runs Claude, Codex, or OpenCode in a sandboxed work → review → gate loop, iterating automatically until the agent is satisfied or your max iterations are hit. Get even fancier by defining what to review and the criteria for done:
 
 ```sh
 cook "Implement dark mode" \
