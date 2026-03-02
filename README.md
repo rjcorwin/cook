@@ -4,25 +4,14 @@ A sandboxed agent loop for Claude Code. Runs work-review-gate iterations inside 
 
 ## Prerequisites
 
-- [Go](https://go.dev/dl/) 1.25+
+- [Node.js](https://nodejs.org/) 20+
 - [Docker](https://docs.docker.com/get-docker/)
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
 
 ## Install
 
-**Quick install:**
-
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rjcorwin/cook/main/install.sh | sh
-```
-
-**Manual build:**
-
-```sh
-git clone https://github.com/rjcorwin/cook.git
-cd cook/cook
-go build -o cook .
-cp cook ~/.local/bin/
+npm install -g @rjcorwin/cook
 ```
 
 ## Quick start
@@ -42,9 +31,11 @@ cook "Fix the login bug" 5     # run with up to 5 iterations
 
 The loop repeats until the gate says PROCEED or max iterations are reached (default: 3).
 
+A persistent status bar at the bottom of the terminal shows the current step, iteration, model, and elapsed time.
+
 ## Configuration
 
-- `COOK.md` — Project instructions and agent loop template (Go `text/template` syntax).
+- `COOK.md` — Project instructions and agent loop template (JS template literal syntax).
 - `.cook.config.json` — Network restrictions and environment variable passthrough.
 - `.cook.Dockerfile` — Project-specific dependencies layered on top of the base sandbox image.
 
