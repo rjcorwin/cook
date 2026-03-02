@@ -18,22 +18,42 @@ npm install -g @rjcorwin/cook
 ```sh
 cd your-project
 cook init                      # creates COOK.md, .cook.config.json, .cook.Dockerfile
+cook doctor                    # checks Docker + auth readiness
 cook "Add dark mode"           # runs the agent loop
-cook "Fix the login bug" 5     # run with up to 5 iterations
+cook "Fix the login bug" 5     # runs with up to 5 iterations
 ```
 
-## Example
+## Examples
 
-Build a space cat themed todo app from scratch with code review:
+Basic run:
 
 ```sh
-cook "Create a space cat themed todo app in a single index.html" \
-     "Plz code review. Split issues into high/medium/low." \
-     "Say DONE if all high and medium issues are addressed, else say ITERATE and describe the work that needs to be done" \
+cook "Create a space cat themed todo app in a single index.html"
+```
+
+Custom prompts + max iterations:
+
+```sh
+cook "Implement dark mode" \
+     "Review the implementation. Categorize findings by High/Medium/Low." \
+     "Reply DONE if no High findings remain; otherwise ITERATE." \
      5
 ```
 
-The four arguments map to: **work** prompt, **review** prompt, **gate** prompt, and **max iterations**. Cook will iterate until the gate says DONE or max iterations are reached.
+Per-step agent/model overrides (for one run):
+
+```sh
+cook "Implement auth flow" \
+  --agent opencode --model gpt-5 \
+  --work-agent codex --work-model gpt-5-codex \
+  --review-agent claude --review-model opus
+```
+
+Doctor checks using the same override logic:
+
+```sh
+cook doctor --work-agent codex --review-agent claude
+```
 
 ## How it works
 
@@ -72,7 +92,7 @@ Example `.cook.config.json`:
     "mode": "default",
     "allowedHosts": []
   },
-  "env": []
+  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
 }
 ```
 
