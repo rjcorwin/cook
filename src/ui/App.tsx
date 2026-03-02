@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text, useApp } from 'ink'
-import { LogStream, type Section } from './LogStream.js'
-import { StatusBar } from './StatusBar.js'
+import { LogStream, type StaticItem } from './LogStream.js'
 import { loopEvents } from '../loop.js'
 
 interface AppState {
@@ -11,8 +10,7 @@ interface AppState {
   model: string
   startTime: number
   logFile: string
-  completedSections: Section[]
-  currentSection: Section | null
+  active: boolean
   done: boolean
   error: string | null
 }
@@ -25,6 +23,8 @@ interface AppProps {
 
 export function App({ maxIterations, model, showRequest }: AppProps) {
   const { exit } = useApp()
+  const nextId = useRef(0)
+  const itemsRef = useRef<StaticItem[]>([])
 
   const [state, setState] = useState<AppState>({
     step: 'starting',
@@ -33,53 +33,54 @@ export function App({ maxIterations, model, showRequest }: AppProps) {
     model,
     startTime: Date.now(),
     logFile: '',
-    completedSections: [],
-    currentSection: null,
+    active: false,
     done: false,
     error: null,
   })
 
   useEffect(() => {
+    const getId = () => nextId.current++
+
     const onLogFile = (logFile: string) => setState(s => ({ ...s, logFile }))
+
     const onStep = ({ step, iteration }: { step: string; iteration: number }) =>
       setState(s => {
-        const completed = s.currentSection
-          ? [...s.completedSections, s.currentSection]
-          : s.completedSections
-        return {
-          ...s,
-          step,
-          iteration,
-          completedSections: completed,
-          currentSection: { step, iteration, request: null, lines: [] },
+        if (s.active) {
+          itemsRef.current.push({ id: getId(), type: 'section-close', step: s.step })
         }
+        itemsRef.current.push({ id: getId(), type: 'section-header', step, iteration })
+        return { ...s, step, iteration, active: true }
       })
+
     const onPrompt = (prompt: string) =>
       setState(s => {
-        if (!s.currentSection) return s
-        return {
-          ...s,
-          currentSection: { ...s.currentSection, request: prompt },
-        }
+        if (!showRequest) return s
+        itemsRef.current.push({ id: getId(), type: 'request', step: s.step, text: prompt })
+        return { ...s }
       })
+
     const onLine = (line: string) =>
       setState(s => {
-        if (!s.currentSection) return s
-        return {
-          ...s,
-          currentSection: {
-            ...s.currentSection,
-            lines: [...s.currentSection.lines, line],
-          },
-        }
+        itemsRef.current.push({ id: getId(), type: 'line', step: s.step, text: line })
+        return { ...s }
       })
-    const onDone = () => setState(s => {
-      const completed = s.currentSection
-        ? [...s.completedSections, s.currentSection]
-        : s.completedSections
-      return { ...s, completedSections: completed, currentSection: null, done: true }
-    })
-    const onError = (err: string) => setState(s => ({ ...s, error: err }))
+
+    const onDone = () =>
+      setState(s => {
+        if (s.active) {
+          itemsRef.current.push({ id: getId(), type: 'section-close', step: s.step })
+        }
+        itemsRef.current.push({ id: getId(), type: 'done', step: s.step })
+        return { ...s, active: false, done: true }
+      })
+
+    const onError = (err: string) =>
+      setState(s => {
+        if (s.active) {
+          itemsRef.current.push({ id: getId(), type: 'section-close', step: s.step })
+        }
+        return { ...s, active: false, error: err }
+      })
 
     loopEvents.on('logFile', onLogFile)
     loopEvents.on('step', onStep)
@@ -96,20 +97,23 @@ export function App({ maxIterations, model, showRequest }: AppProps) {
       loopEvents.off('done', onDone)
       loopEvents.off('error', onError)
     }
-  }, [])
+  }, [showRequest])
 
   useEffect(() => {
     if (state.done || state.error) exit()
   }, [state.done, state.error, exit])
 
-  const elapsed = Math.floor((Date.now() - state.startTime) / 1000)
-
   return (
-    <Box flexDirection="column" height="100%">
+    <Box flexDirection="column">
       <LogStream
-        completedSections={state.completedSections}
-        currentSection={state.currentSection}
-        showRequest={showRequest}
+        items={[...itemsRef.current]}
+        active={state.active}
+        step={state.step}
+        iteration={state.iteration}
+        maxIterations={state.maxIterations}
+        model={state.model}
+        startTime={state.startTime}
+        logFile={state.logFile}
       />
 
       {state.error && (
@@ -117,16 +121,6 @@ export function App({ maxIterations, model, showRequest }: AppProps) {
           <Text color="red" bold>Error: {state.error}</Text>
         </Box>
       )}
-
-      <StatusBar
-        step={state.step}
-        iteration={state.iteration}
-        maxIterations={state.maxIterations}
-        model={state.model}
-        elapsed={elapsed}
-        logFile={state.logFile}
-        done={state.done}
-      />
     </Box>
   )
 }

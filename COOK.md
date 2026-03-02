@@ -1,17 +1,14 @@
-We're working in a work->review->gate loop.
+# COOK.md
 
 ## Agent Loop
 
-Step: **{{.Step}}** | Iteration: {{.Iteration}}/{{.MaxIterations}}
+Step: **${step}** | Iteration: ${iteration}/${maxIterations}
 
 ### Task
-{{.Prompt}}
+${prompt}
 
-{{if .LastMessage}}
-### Previous Output
-{{.LastMessage}}
-{{end}}
+${lastMessage ? '### Previous Output\n' + lastMessage : ''}
 
 ### History
-Session log: {{.LogFile}}
+Session log: ${logFile}
 Read the session log for full context from previous steps.

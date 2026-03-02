@@ -1,10 +1,7 @@
 {
   "network": {
     "mode": "default",
-    "allowedHosts": [
-      "registry.npmjs.org",
-      "registry.yarnpkg.com"
-    ]
+    "allowedHosts": []
   },
   "env": []
 }
