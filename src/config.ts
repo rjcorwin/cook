@@ -13,7 +13,7 @@ export interface StepAgentConfig {
 
 export interface CookConfig {
   network: {
-    mode: 'default' | 'restricted'
+    mode: 'restricted' | 'unrestricted'
     allowedHosts: string[]
   }
   env: string[]
@@ -43,8 +43,8 @@ function parseStepAgentConfig(value: unknown): StepAgentConfig {
 export function loadConfig(projectRoot: string): CookConfig {
   const configPath = path.join(projectRoot, '.cook.config.json')
   const defaults: CookConfig = {
-    network: { mode: 'default', allowedHosts: [] },
-    env: [],
+    network: { mode: 'restricted', allowedHosts: [] },
+    env: ['CLAUDE_CODE_OAUTH_TOKEN'],
     animation: 'strip',
     agent: 'claude',
     steps: { work: {}, review: {}, gate: {} },
@@ -57,11 +57,12 @@ export function loadConfig(projectRoot: string): CookConfig {
   }
   try {
     const parsed = JSON.parse(raw)
-    const networkMode = parsed.network?.mode === 'restricted' ? 'restricted' : defaults.network.mode
+    const networkMode = parsed.network?.mode === 'unrestricted' ? 'unrestricted' : defaults.network.mode
     const allowedHosts = Array.isArray(parsed.network?.allowedHosts)
       ? parsed.network.allowedHosts.filter((value: unknown): value is string => typeof value === 'string')
       : defaults.network.allowedHosts
-    const env = Array.isArray(parsed.env) ? parsed.env.filter((value: unknown): value is string => typeof value === 'string') : defaults.env
+    const userEnv = Array.isArray(parsed.env) ? parsed.env.filter((value: unknown): value is string => typeof value === 'string') : []
+    const env = [...new Set([...defaults.env, ...userEnv])]
     const animation = isAnimationStyle(parsed.animation) ? parsed.animation : defaults.animation
     const agent = isAgentName(parsed.agent) ? parsed.agent : defaults.agent
     const model = typeof parsed.model === 'string' && parsed.model.trim().length > 0 ? parsed.model : undefined

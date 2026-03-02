@@ -32,7 +32,7 @@ const DEFAULT_COOK_CONFIG_JSON = `{
     "gate": {}
   },
   "network": {
-    "mode": "default",
+    "mode": "restricted",
     "allowedHosts": []
   },
   "env": []
@@ -285,8 +285,8 @@ interface StepSelection {
 
 const STEP_NAMES: StepName[] = ['work', 'review', 'gate']
 const FALLBACK_CONFIG: CookConfig = {
-  network: { mode: 'default', allowedHosts: [] },
-  env: [],
+  network: { mode: 'restricted', allowedHosts: [] },
+  env: ['CLAUDE_CODE_OAUTH_TOKEN'],
   animation: 'strip',
   agent: 'claude',
   steps: { work: {}, review: {}, gate: {} },

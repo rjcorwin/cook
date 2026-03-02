@@ -364,7 +364,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
     Labels: { 'cook.project': projectRoot },
     HostConfig: {
       Binds: [`${projectRoot}:${projectRoot}`],
-      CapAdd: config.network.mode === 'restricted' ? ['NET_ADMIN'] : [],
+      CapAdd: config.network.mode !== 'unrestricted' ? ['NET_ADMIN'] : [],
     },
   })
 
@@ -380,7 +380,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   await copyAuthFiles(container, userSpec)
 
-  if (config.network.mode === 'restricted') {
+  if (config.network.mode !== 'unrestricted') {
     logStep('Applying network restrictions...')
     const script = generateIptablesScript(agents, config.network.allowedHosts)
     await containerExec(container, 'root', ['sh', '-c', script])
