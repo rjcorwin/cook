@@ -1,12 +1,11 @@
 # cook
 
-A sandboxed agent loop for Claude Code. Runs work-review-gate iterations inside a Docker container so the AI can operate with full autonomy while your host stays safe.
+A sandboxed multi-agent loop (Claude, Codex, or OpenCode). Runs work-review-gate iterations inside a Docker container so the AI can operate with full autonomy while your host stays safe.
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 20+
 - [Docker](https://docs.docker.com/get-docker/)
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
 
 ## Install
 
@@ -38,8 +37,8 @@ The four arguments map to: **work** prompt, **review** prompt, **gate** prompt, 
 
 ## How it works
 
-1. **Work** — Claude executes your prompt inside a Docker sandbox with the project bind-mounted.
-2. **Review** — A second Claude pass reviews what changed and flags issues by severity.
+1. **Work** — The selected agent executes your prompt inside a Docker sandbox with the project bind-mounted.
+2. **Review** — A second pass reviews what changed and flags issues by severity.
 3. **Gate** — A third pass decides PROCEED or ITERATE based on the review.
 
 The loop repeats until the gate says PROCEED or max iterations are reached (default: 3).
@@ -49,8 +48,23 @@ A persistent status bar at the bottom of the terminal shows the current step, it
 ## Configuration
 
 - `COOK.md` — Project instructions and agent loop template (JS template literal syntax).
-- `.cook.config.json` — Network restrictions and environment variable passthrough.
+- `.cook.config.json` — Default agent, network restrictions, and environment variable passthrough.
 - `.cook.Dockerfile` — Project-specific dependencies layered on top of the base sandbox image.
+
+Example `.cook.config.json`:
+
+```json
+{
+  "agent": "codex",
+  "network": {
+    "mode": "default",
+    "allowedHosts": []
+  },
+  "env": []
+}
+```
+
+CLI `--agent` overrides the config default for a single run.
 
 ## Options
 
@@ -64,5 +78,6 @@ cook rebuild                    Rebuild the sandbox Docker image
 --review PROMPT                 Override review step prompt
 --gate PROMPT                   Override gate step prompt
 --max-iterations N              Max review iterations (default: 3)
---model MODEL                   Claude model (default: opus)
+--agent AGENT                   Agent to run (claude|codex|opencode)
+--model MODEL                   Agent model (default depends on agent)
 ```

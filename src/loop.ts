@@ -2,6 +2,7 @@ import { EventEmitter } from 'events'
 import type { Sandbox } from './sandbox.js'
 import { renderTemplate, type LoopContext } from './template.js'
 import { createSessionLog, appendToLog, logOK, logWarn } from './log.js'
+import type { AgentName } from './config.js'
 
 export interface LoopConfig {
   workPrompt: string
@@ -9,6 +10,7 @@ export interface LoopConfig {
   gatePrompt: string
   maxIterations: number
   model: string
+  agent: AgentName
   projectRoot: string
 }
 
@@ -59,7 +61,7 @@ export async function agentLoop(
         })
 
         events.emit('prompt', prompt)
-        output = await sandbox.runClaude(config.model, prompt, (line) => {
+        output = await sandbox.runAgent(config.agent, config.model, prompt, (line) => {
           events.emit('line', line)
         })
       } catch (err) {

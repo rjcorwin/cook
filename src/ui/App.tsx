@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text, useApp } from 'ink'
 import { LogStream, type StaticItem } from './LogStream.js'
-import type { AnimationStyle } from '../config.js'
+import type { AgentName, AnimationStyle } from '../config.js'
 import { loopEvents } from '../loop.js'
 
 interface AppState {
   step: string
   iteration: number
   maxIterations: number
+  agent: AgentName
   model: string
   startTime: number
   logFile: string
@@ -18,12 +19,13 @@ interface AppState {
 
 interface AppProps {
   maxIterations: number
+  agent: AgentName
   model: string
   showRequest: boolean
   animation: AnimationStyle
 }
 
-export function App({ maxIterations, model, showRequest, animation }: AppProps) {
+export function App({ maxIterations, agent, model, showRequest, animation }: AppProps) {
   const { exit } = useApp()
   const nextId = useRef(0)
   const itemsRef = useRef<StaticItem[]>([])
@@ -32,6 +34,7 @@ export function App({ maxIterations, model, showRequest, animation }: AppProps) 
     step: 'starting',
     iteration: 1,
     maxIterations,
+    agent,
     model,
     startTime: Date.now(),
     logFile: '',
@@ -113,6 +116,7 @@ export function App({ maxIterations, model, showRequest, animation }: AppProps) 
         step={state.step}
         iteration={state.iteration}
         maxIterations={state.maxIterations}
+        agent={state.agent}
         model={state.model}
         startTime={state.startTime}
         logFile={state.logFile}

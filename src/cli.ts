@@ -6,7 +6,7 @@ import path from 'path'
 import React from 'react'
 import { render } from 'ink'
 import Docker from 'dockerode'
-import { loadConfig } from './config.js'
+import { loadConfig, type AgentName } from './config.js'
 import { loadCookMD, DEFAULT_COOK_MD } from './template.js'
 import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET, CYAN } from './log.js'
 import { startSandbox, rebuildBaseImage, type Sandbox } from './sandbox.js'
@@ -24,6 +24,7 @@ DONE if: the work is complete and no High severity issues remain.
 ITERATE if: there are High severity issues or the work is incomplete.`
 
 const DEFAULT_COOK_CONFIG_JSON = `{
+  "agent": "claude",
   "network": {
     "mode": "default",
     "allowedHosts": []
@@ -87,7 +88,8 @@ ${BOLD}Options:${RESET}
   --review PROMPT                 Override review step prompt
   --gate PROMPT                   Override gate step prompt
   --max-iterations N              Max review iterations (default: 3)
-  --model MODEL                   Claude model (default: opus)
+  --agent AGENT                   Agent to run (claude|codex|opencode)
+  --model MODEL                   Agent model (default depends on agent)
   --hide-request                  Hide the templated request for each step
   -h, --help                      Show this help`)
   process.exit(1)
@@ -134,12 +136,13 @@ interface ParsedArgs {
   reviewPrompt: string
   gatePrompt: string
   maxIterations: number
-  model: string
+  model?: string
+  agent?: string
   showRequest: boolean
 }
 
 function parseArgs(args: string[]): ParsedArgs {
-  const VALUE_FLAGS = new Set(['--work', '--review', '--gate', '--model', '--max-iterations'])
+  const VALUE_FLAGS = new Set(['--work', '--review', '--gate', '--model', '--agent', '--max-iterations'])
 
   const flags: Record<string, string> = {}
   const positional: string[] = []
@@ -177,10 +180,28 @@ function parseArgs(args: string[]): ParsedArgs {
   const workPrompt = flags['--work'] ?? prompts[0] ?? ''
   const reviewPrompt = flags['--review'] ?? prompts[1] ?? DEFAULT_REVIEW_PROMPT
   const gatePrompt = flags['--gate'] ?? prompts[2] ?? DEFAULT_GATE_PROMPT
-  const model = flags['--model'] ?? 'opus'
+  const model = flags['--model']
+  const agent = flags['--agent']
   const showRequest = flags['--hide-request'] !== 'true'
 
-  return { workPrompt, reviewPrompt, gatePrompt, maxIterations, model, showRequest }
+  return { workPrompt, reviewPrompt, gatePrompt, maxIterations, model, agent, showRequest }
+}
+
+function parseAgent(value: string | undefined, fallback: AgentName): AgentName {
+  const normalized = (value ?? fallback).toLowerCase()
+  if (normalized === 'claude' || normalized === 'codex' || normalized === 'opencode') {
+    return normalized
+  }
+  console.error(`Error: invalid agent "${value}". Expected one of: claude, codex, opencode.`)
+  process.exit(1)
+}
+
+function defaultModelForAgent(agent: AgentName): string {
+  switch (agent) {
+    case 'claude': return 'opus'
+    case 'codex': return 'gpt-5-codex'
+    case 'opencode': return 'gpt-5'
+  }
 }
 
 async function runLoop(args: string[]): Promise<void> {
@@ -192,11 +213,14 @@ async function runLoop(args: string[]): Promise<void> {
   }
 
   const config = loadConfig(projectRoot)
+  const agent = parseAgent(parsed.agent, config.agent)
+  const model = parsed.model ?? defaultModelForAgent(agent)
 
   const bannerLines = [
     `${BOLD}cook${RESET} — agent loop`,
     ``,
-    `  Model:       ${parsed.model}`,
+    `  Agent:       ${agent}`,
+    `  Model:       ${model}`,
     `  Iterations:  ${parsed.maxIterations}`,
     `  Project:     ${projectRoot}`,
   ]
@@ -213,7 +237,7 @@ async function runLoop(args: string[]): Promise<void> {
 
   const docker = new Docker()
   try {
-    sandbox = await startSandbox(docker, projectRoot, config)
+    sandbox = await startSandbox(docker, projectRoot, config, agent)
   } catch (err) {
     logErr(`Sandbox failed: ${err}`)
     process.exit(1)
@@ -222,7 +246,7 @@ async function runLoop(args: string[]): Promise<void> {
   try {
     const cookMD = loadCookMD(projectRoot)
     const { unmount, waitUntilExit } = render(
-      React.createElement(App, { maxIterations: parsed.maxIterations, model: parsed.model, showRequest: parsed.showRequest, animation: config.animation }),
+      React.createElement(App, { maxIterations: parsed.maxIterations, model, agent, showRequest: parsed.showRequest, animation: config.animation }),
       { exitOnCtrlC: false }
     )
     inkInstance = { unmount }
@@ -232,7 +256,8 @@ async function runLoop(args: string[]): Promise<void> {
       reviewPrompt: parsed.reviewPrompt,
       gatePrompt: parsed.gatePrompt,
       maxIterations: parsed.maxIterations,
-      model: parsed.model,
+      model,
+      agent,
       projectRoot,
     }, cookMD, loopEvents)
 
