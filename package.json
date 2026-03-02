@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "cook": "./dist/cli.js"
+    "cook": "dist/cli.js"
   },
   "engines": {
     "node": ">=20"
