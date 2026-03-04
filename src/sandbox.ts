@@ -195,14 +195,17 @@ function generateIptablesScript(agents: AgentName[], allowedHosts: string[]): st
   return `set -e
 ALLOWED_IPS=""
 for host in ${hostList}; do
-    ips=$(getent hosts "$host" 2>/dev/null | awk '{print $1}' || true)
+    ips=$(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)
     ALLOWED_IPS="$ALLOWED_IPS $ips"
 done
+DNS_SERVERS=$(awk '/^nameserver/{print $2}' /etc/resolv.conf)
 iptables -P OUTPUT DROP
 iptables -A OUTPUT -o lo -j ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -A OUTPUT -p udp -d 127.0.0.11 --dport 53 -j ACCEPT
-iptables -A OUTPUT -p tcp -d 127.0.0.11 --dport 53 -j ACCEPT
+for dns in $DNS_SERVERS; do
+    iptables -A OUTPUT -p udp -d "$dns" --dport 53 -j ACCEPT
+    iptables -A OUTPUT -p tcp -d "$dns" --dport 53 -j ACCEPT
+done
 for ip in $ALLOWED_IPS; do
     iptables -A OUTPUT -p tcp -d "$ip" --dport 443 -j ACCEPT
 done`
