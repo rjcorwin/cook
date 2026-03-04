@@ -38,7 +38,7 @@ cook "Implement dark mode" \
 ## Install
 
 ```sh
-npm install -g @rjcorwin/cook
+npm install -g @let-it-cook/cli
 ```
 
 ## Quick start
