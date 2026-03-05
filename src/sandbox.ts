@@ -166,9 +166,11 @@ async function copyAuthFiles(container: Docker.Container, userSpec: string): Pro
   await containerExec(container, 'root', ['chown', '-R', userSpec, '/home/cook'])
 }
 
-function hasClaudeContainerCredentials(): boolean {
+function hasClaudeContainerCredentials(config: CookConfig): boolean {
   const home = os.homedir()
-  return fs.existsSync(path.join(home, '.claude', '.credentials.json'))
+  if (fs.existsSync(path.join(home, '.claude', '.credentials.json'))) return true
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN && config.env.includes('CLAUDE_CODE_OAUTH_TOKEN')) return true
+  return false
 }
 
 function gitConfig(key: string, fallback: string): string {
@@ -335,7 +337,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
 
   await cleanupStaleContainers(docker, projectRoot)
   await ensureBaseImage(docker)
-  if (agents.includes('claude') && !hasClaudeContainerCredentials()) {
+  if (agents.includes('claude') && !hasClaudeContainerCredentials(config)) {
     logWarn('Claude selected but ~/.claude/.credentials.json is missing on host. OAuth/keychain-only logins usually do not transfer to Linux containers; run `claude setup-token` on host.')
   }
 
