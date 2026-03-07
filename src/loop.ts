@@ -20,14 +20,12 @@ export interface LoopConfig {
 }
 
 const DONE_KEYWORDS = ['DONE', 'PASS', 'COMPLETE', 'APPROVE', 'ACCEPT']
-const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY']
+const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY', 'NEXT']
 
 export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
-  for (const line of output.split('\n')) {
-    const upper = line.trim().toUpperCase()
-    if (DONE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'DONE'
-    if (ITERATE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'ITERATE'
-  }
+  const upper = output.toUpperCase()
+  if (DONE_KEYWORDS.some(kw => upper.includes(kw))) return 'DONE'
+  if (ITERATE_KEYWORDS.some(kw => upper.includes(kw))) return 'ITERATE'
   return 'ITERATE'
 }
 

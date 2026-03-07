@@ -28,6 +28,11 @@ Step: **\${step}** | Iteration: \${iteration}/\${maxIterations}
 ### History
 Session log: \${logFile}
 Read the session log for full context from previous steps.
+
+### Gate Verdicts
+- **DONE** — Work is complete, no High severity issues remain.
+- **ITERATE** — High severity issues need to be fixed in the work just done.
+- **NEXT** — Current step is good, but there is a next step or phase to continue with.
 `
 
 let cachedTemplateSrc: string | null = null
