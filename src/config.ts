@@ -15,15 +15,18 @@ export interface StepAgentConfig {
 
 export interface CookConfig {
   sandbox: SandboxMode
-  network: {
-    mode: 'restricted' | 'unrestricted'
-    allowedHosts: string[]
-  }
   env: string[]
   animation: AnimationStyle
   agent: AgentName
   model?: string
   steps: Record<StepName, StepAgentConfig>
+}
+
+export interface DockerConfig {
+  network: {
+    mode: 'restricted' | 'unrestricted'
+    allowedHosts: string[]
+  }
 }
 
 function isAnimationStyle(value: unknown): value is AnimationStyle {
@@ -48,16 +51,24 @@ function parseStepAgentConfig(value: unknown): StepAgentConfig {
   return parsed
 }
 
+function resolveConfigPath(projectRoot: string): string | null {
+  const configPath = path.join(projectRoot, '.cook', 'config.json')
+  if (fs.existsSync(configPath)) return configPath
+  return null
+}
+
 export function loadConfig(projectRoot: string): CookConfig {
-  const configPath = path.join(projectRoot, '.cook.config.json')
   const defaults: CookConfig = {
     sandbox: 'agent',
-    network: { mode: 'restricted', allowedHosts: [] },
     env: ['CLAUDE_CODE_OAUTH_TOKEN'],
     animation: 'strip',
     agent: 'claude',
     steps: { work: {}, review: {}, gate: {} },
   }
+
+  const configPath = resolveConfigPath(projectRoot)
+  if (!configPath) return defaults
+
   let raw: string
   try {
     raw = fs.readFileSync(configPath, 'utf8')
@@ -66,10 +77,6 @@ export function loadConfig(projectRoot: string): CookConfig {
   }
   try {
     const parsed = JSON.parse(raw)
-    const networkMode = parsed.network?.mode === 'unrestricted' ? 'unrestricted' : defaults.network.mode
-    const allowedHosts = Array.isArray(parsed.network?.allowedHosts)
-      ? parsed.network.allowedHosts.filter((value: unknown): value is string => typeof value === 'string')
-      : defaults.network.allowedHosts
     const userEnv = Array.isArray(parsed.env) ? parsed.env.filter((value: unknown): value is string => typeof value === 'string') : []
     const env = [...new Set([...defaults.env, ...userEnv])]
     const animation = isAnimationStyle(parsed.animation) ? parsed.animation : defaults.animation
@@ -81,17 +88,30 @@ export function loadConfig(projectRoot: string): CookConfig {
       gate: parseStepAgentConfig(parsed.steps?.gate),
     }
     const sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
-    return {
-      sandbox,
-      network: { mode: networkMode, allowedHosts },
-      env,
-      animation,
-      agent,
-      model,
-      steps,
-    }
+    return { sandbox, env, animation, agent, model, steps }
   } catch (err) {
-    logWarn(`Malformed .cook.config.json: ${err}`)
+    logWarn(`Malformed .cook/config.json: ${err}`)
     return defaults
+  }
+}
+
+const DEFAULT_DOCKER_CONFIG: DockerConfig = {
+  network: { mode: 'restricted', allowedHosts: [] },
+}
+
+export function loadDockerConfig(projectRoot: string): DockerConfig {
+  const dockerConfigPath = path.join(projectRoot, '.cook', 'docker.json')
+  if (!fs.existsSync(dockerConfigPath)) return DEFAULT_DOCKER_CONFIG
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(dockerConfigPath, 'utf8'))
+    const networkMode = parsed.network?.mode === 'unrestricted' ? 'unrestricted' : DEFAULT_DOCKER_CONFIG.network.mode
+    const allowedHosts = Array.isArray(parsed.network?.allowedHosts)
+      ? parsed.network.allowedHosts.filter((value: unknown): value is string => typeof value === 'string')
+      : DEFAULT_DOCKER_CONFIG.network.allowedHosts
+    return { network: { mode: networkMode, allowedHosts } }
+  } catch (err) {
+    logWarn(`Malformed .cook/docker.json: ${err}`)
+    return DEFAULT_DOCKER_CONFIG
   }
 }

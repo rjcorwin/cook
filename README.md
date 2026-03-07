@@ -46,7 +46,7 @@ npm install -g @let-it-cook/cli
 
 ```sh
 cd your-project
-cook init                      # creates COOK.md, .cook.config.json, .cook.Dockerfile
+cook init                      # creates COOK.md + .cook/ config directory
 cook doctor                    # checks Docker + auth readiness
 cook "Add dark mode"           # runs the agent loop
 cook "Fix the login bug" 5     # runs with up to 5 iterations
@@ -95,7 +95,7 @@ Cook supports three sandbox modes via `--sandbox`:
 | **Docker** | `--sandbox docker` | Runs agents inside a Docker container with network restrictions. Full isolation. |
 | **None** | `--sandbox none` | Spawns agents natively with all safety bypassed (`--dangerously-skip-permissions` etc.). Use with caution. |
 
-You can also set the sandbox mode per-step in `.cook.config.json` (see Configuration below).
+You can also set the sandbox mode per-step in `.cook/config.json` (see Configuration below).
 
 > **Note:** OpenCode is only supported in Docker mode — it has no OS-level sandbox.
 
@@ -105,7 +105,7 @@ When using `--sandbox docker`, the agent runs inside a Docker container — it c
 
 Network access is restricted by default using `iptables` inside the container. Only outbound HTTPS to the agent's API endpoint is allowed (e.g. `api.anthropic.com` for Claude). Everything else — including Google, npm, GitHub, etc. — is blocked unless explicitly added to `allowedHosts`.
 
-To allow additional hosts:
+To allow additional hosts, create `.cook/docker.json`:
 
 ```json
 {
@@ -128,11 +128,15 @@ To disable network restrictions entirely (not recommended):
 
 ## Configuration
 
-- `COOK.md` — Project instructions and agent loop template (JS template literal syntax).
-- `.cook.config.json` — Default agent/model/sandbox, per-step overrides, network restrictions (Docker mode), and environment variable passthrough.
-- `.cook.Dockerfile` — Project-specific dependencies layered on top of the base sandbox image (Docker mode only).
+All config lives in the `.cook/` directory (created by `cook init`):
 
-Example `.cook.config.json`:
+- `COOK.md` — Project instructions and agent loop template (JS template literal syntax). Lives in the project root for visibility.
+- `.cook/config.json` — Default agent/model/sandbox, per-step overrides, and environment variable passthrough.
+- `.cook/docker.json` — Docker-only config: network mode and allowed hosts. Only needed when using `--sandbox docker`.
+- `.cook/Dockerfile` — Project-specific dependencies layered on top of the base sandbox image (Docker mode only).
+- `.cook/logs/` — Session logs (gitignored by `.cook/.gitignore`).
+
+Example `.cook/config.json`:
 
 ```json
 {
@@ -151,13 +155,11 @@ Example `.cook.config.json`:
       "sandbox": "docker"
     }
   },
-  "network": {
-    "mode": "restricted",
-    "allowedHosts": []
-  },
   "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
 }
 ```
+
+The `env` array controls which environment variables from your host are forwarded to the agent process. In Docker mode, these are injected into the container; in agent/none mode, they're passed to the spawned process. Auth tokens like `CLAUDE_CODE_OAUTH_TOKEN` and `OPENAI_API_KEY` need to be listed here for agents to authenticate.
 
 CLI defaults (`--agent`, `--model`, `--sandbox`) override config defaults for a single run. Step flags (`--work-agent`, `--review-agent`, `--gate-agent`, `--work-model`, `--review-model`, `--gate-model`) override both. Per-step `sandbox` in config overrides the global sandbox mode.
 

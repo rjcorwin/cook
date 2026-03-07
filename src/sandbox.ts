@@ -6,7 +6,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import type { AgentName, CookConfig } from './config.js'
+import type { AgentName, DockerConfig } from './config.js'
 import type { AgentRunner } from './runner.js'
 import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
@@ -100,8 +100,15 @@ async function buildImage(docker: Docker, imageName: string, dockerfile: string,
   logOK(`Image ${imageName} built`)
 }
 
+function resolveDockerfilePath(projectRoot: string): string | null {
+  const dockerfilePath = path.join(projectRoot, '.cook', 'Dockerfile')
+  if (fs.existsSync(dockerfilePath)) return dockerfilePath
+  return null
+}
+
 function getProjectImageTag(projectRoot: string): { imageName: string, dockerfile: string } | null {
-  const dockerfilePath = path.join(projectRoot, '.cook.Dockerfile')
+  const dockerfilePath = resolveDockerfilePath(projectRoot)
+  if (!dockerfilePath) return null
   let data: Buffer
   try {
     data = fs.readFileSync(dockerfilePath) as Buffer
@@ -318,7 +325,7 @@ export class Sandbox implements AgentRunner {
   }
 }
 
-export async function startSandbox(docker: Docker, projectRoot: string, config: CookConfig, agents: AgentName[]): Promise<Sandbox> {
+export async function startSandbox(docker: Docker, projectRoot: string, env: string[], dockerConfig: DockerConfig, agents: AgentName[]): Promise<Sandbox> {
   try {
     await docker.ping()
   } catch {
@@ -349,15 +356,15 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   const gitName = gitConfig('user.name', 'cook')
   const gitEmail = gitConfig('user.email', 'cook@localhost')
-  const env = [
+  const containerEnv = [
     `GIT_AUTHOR_NAME=${gitName}`,
     `GIT_AUTHOR_EMAIL=${gitEmail}`,
     `GIT_COMMITTER_NAME=${gitName}`,
     `GIT_COMMITTER_EMAIL=${gitEmail}`,
   ]
-  for (const varName of config.env) {
+  for (const varName of env) {
     const val = process.env[varName]
-    if (val !== undefined) env.push(`${varName}=${val}`)
+    if (val !== undefined) containerEnv.push(`${varName}=${val}`)
   }
 
   const containerName = `cook-${process.pid}`
@@ -368,7 +375,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
     Labels: { 'cook.project': projectRoot },
     HostConfig: {
       Binds: [`${projectRoot}:${projectRoot}`],
-      CapAdd: config.network.mode !== 'unrestricted' ? ['NET_ADMIN'] : [],
+      CapAdd: dockerConfig.network.mode !== 'unrestricted' ? ['NET_ADMIN'] : [],
     },
   })
 
@@ -384,17 +391,17 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   await copyAuthFiles(container, userSpec)
 
-  if (config.network.mode !== 'unrestricted') {
+  if (dockerConfig.network.mode !== 'unrestricted') {
     logStep('Applying network restrictions...')
-    const script = generateIptablesScript(agents, config.network.allowedHosts)
+    const script = generateIptablesScript(agents, dockerConfig.network.allowedHosts)
     await containerExec(container, 'root', ['sh', '-c', script])
-    const allHosts = [...new Set([...requiredHostsForAgents(agents), ...config.network.allowedHosts])]
+    const allHosts = [...new Set([...requiredHostsForAgents(agents), ...dockerConfig.network.allowedHosts])]
     logOK(`Network restricted to: ${allHosts.join(', ')}`)
   }
 
   logOK(`Sandbox started (container: ${containerName})`)
 
-  return new Sandbox(docker, container, userSpec, env, projectRoot)
+  return new Sandbox(docker, container, userSpec, containerEnv, projectRoot)
 }
 
 export { BASE_IMAGE_NAME, BASE_DOCKERFILE, buildImage }

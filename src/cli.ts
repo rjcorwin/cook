@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 import React from 'react'
 import { render } from 'ink'
-import { loadConfig, type AgentName, type CookConfig, type StepName } from './config.js'
+import { loadConfig, loadDockerConfig, type AgentName, type CookConfig, type StepName } from './config.js'
 import { RunnerPool, type SandboxMode } from './runner.js'
 import { NativeRunner } from './native-runner.js'
 import { BareRunner } from './bare-runner.js'
@@ -34,12 +34,11 @@ const DEFAULT_COOK_CONFIG_JSON = `{
     "review": {},
     "gate": {}
   },
-  "network": {
-    "mode": "restricted",
-    "allowedHosts": []
-  },
   "env": []
 }
+`
+
+const DEFAULT_COOK_GITIGNORE = `logs/
 `
 
 const DEFAULT_COOK_DOCKERFILE = `FROM cook-sandbox
@@ -123,10 +122,13 @@ ${BOLD}Options:${RESET}
 function cmdInit(projectRoot: string): void {
   logPhase('Initialize project for cook')
 
+  fs.mkdirSync(path.join(projectRoot, '.cook', 'logs'), { recursive: true })
+
   const files = [
     { path: 'COOK.md', content: DEFAULT_COOK_MD },
-    { path: '.cook.config.json', content: DEFAULT_COOK_CONFIG_JSON },
-    { path: '.cook.Dockerfile', content: DEFAULT_COOK_DOCKERFILE },
+    { path: '.cook/config.json', content: DEFAULT_COOK_CONFIG_JSON },
+    { path: '.cook/Dockerfile', content: DEFAULT_COOK_DOCKERFILE },
+    { path: '.cook/.gitignore', content: DEFAULT_COOK_GITIGNORE },
   ]
 
   for (const file of files) {
@@ -143,12 +145,10 @@ function cmdInit(projectRoot: string): void {
     }
   }
 
-  fs.mkdirSync(path.join(projectRoot, '.cook', 'logs'), { recursive: true })
-
   logOK('Project initialized for cook')
   logStep(`Edit COOK.md to customize the agent loop prompts`)
-  logStep(`Edit .cook.config.json to configure network restrictions and env vars`)
-  logStep(`Edit .cook.Dockerfile to add project-specific dependencies`)
+  logStep(`Edit .cook/config.json to configure agent, sandbox, and env vars`)
+  logStep(`Edit .cook/Dockerfile to add project-specific dependencies`)
 }
 
 async function cmdRebuild(): Promise<void> {
@@ -301,7 +301,6 @@ interface StepSelection {
 const STEP_NAMES: StepName[] = ['work', 'review', 'gate']
 const FALLBACK_CONFIG: CookConfig = {
   sandbox: 'agent',
-  network: { mode: 'restricted', allowedHosts: [] },
   env: ['CLAUDE_CODE_OAUTH_TOKEN'],
   animation: 'strip',
   agent: 'claude',
@@ -386,7 +385,7 @@ function checkClaudeAuth(config: CookConfig, usedModes: Set<SandboxMode>): { ok:
     if (envPassesThrough(config, 'CLAUDE_CODE_OAUTH_TOKEN')) {
       return { ok: true, msg: 'Claude auth: CLAUDE_CODE_OAUTH_TOKEN set and passed through' }
     }
-    return { ok: false, msg: 'Claude auth: CLAUDE_CODE_OAUTH_TOKEN is set but missing from .cook.config.json env passthrough' }
+    return { ok: false, msg: 'Claude auth: CLAUDE_CODE_OAUTH_TOKEN is set but missing from .cook/config.json env passthrough' }
   }
   if (hostClaudeLoggedIn()) {
     if (usedModes.has('docker')) {
@@ -406,7 +405,7 @@ function checkCodexAuth(config: CookConfig): { ok: boolean; msg: string } {
     if (envPassesThrough(config, 'OPENAI_API_KEY')) {
       return { ok: true, msg: 'Codex auth: OPENAI_API_KEY set and passed through' }
     }
-    return { ok: false, msg: 'Codex auth: OPENAI_API_KEY is set but missing from .cook.config.json env passthrough' }
+    return { ok: false, msg: 'Codex auth: OPENAI_API_KEY is set but missing from .cook/config.json env passthrough' }
   }
   return { ok: false, msg: 'Codex auth: no credentials detected. Set OPENAI_API_KEY or run codex login.' }
 }
@@ -422,7 +421,7 @@ function checkOpencodeAuth(config: CookConfig): { ok: boolean; msg: string } {
     if (envPassesThrough(config, name)) {
       return { ok: true, msg: `OpenCode auth: ${name} set and passed through` }
     }
-    return { ok: false, msg: `OpenCode auth: ${name} is set but missing from .cook.config.json env passthrough` }
+    return { ok: false, msg: `OpenCode auth: ${name} is set but missing from .cook/config.json env passthrough` }
   }
   return { ok: false, msg: 'OpenCode auth: no credentials detected. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.' }
 }
@@ -555,7 +554,8 @@ async function runLoop(args: string[]): Promise<void> {
       case 'docker': {
         const Docker = (await import('dockerode')).default
         const { startSandbox } = await import('./sandbox.js')
-        return startSandbox(new Docker(), projectRoot, config, runAgents)
+        const dockerConfig = loadDockerConfig(projectRoot)
+        return startSandbox(new Docker(), projectRoot, config.env, dockerConfig, runAgents)
       }
       case 'none':
         return new BareRunner(projectRoot, config.env)
