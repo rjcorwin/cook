@@ -114,7 +114,7 @@ export class NativeRunner implements AgentRunner {
       case 'codex':
         return {
           cmd: 'codex',
-          args: ['exec', '--model', model, '--skip-git-repo-check', ...bypassFlags, '-'],
+          args: ['exec', '--model', model, '--full-auto', '--skip-git-repo-check', ...bypassFlags, '-'],
         }
       default:
         throw new Error(`Unsupported agent for native runner: ${agent}`)
