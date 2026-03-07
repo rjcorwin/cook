@@ -1,7 +1,0 @@
-{
-  "network": {
-    "mode": "default",
-    "allowedHosts": []
-  },
-  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
-}
