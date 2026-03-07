@@ -7,6 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import type { AgentName, CookConfig } from './config.js'
+import type { AgentRunner } from './runner.js'
 import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
 
@@ -298,7 +299,7 @@ async function runAgent(
   return output
 }
 
-export class Sandbox {
+export class Sandbox implements AgentRunner {
   constructor(
     private docker: Docker,
     private container: Docker.Container,

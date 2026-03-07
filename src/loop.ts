@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import type { Sandbox } from './sandbox.js'
+import type { AgentRunner, SandboxMode } from './runner.js'
 import { renderTemplate, type LoopContext } from './template.js'
 import { createSessionLog, appendToLog, logOK, logWarn } from './log.js'
 import type { AgentName, StepName } from './config.js'
@@ -7,6 +7,7 @@ import type { AgentName, StepName } from './config.js'
 interface LoopStepConfig {
   agent: AgentName
   model: string
+  sandbox: SandboxMode
 }
 
 export interface LoopConfig {
@@ -33,7 +34,7 @@ export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
 export const loopEvents = new EventEmitter()
 
 export async function agentLoop(
-  sandbox: Sandbox,
+  getRunner: (mode: SandboxMode) => Promise<AgentRunner>,
   config: LoopConfig,
   cookMD: string,
   events: EventEmitter,
@@ -70,7 +71,8 @@ export async function agentLoop(
         })
 
         events.emit('prompt', prompt)
-        output = await sandbox.runAgent(config.steps[step.name].agent, config.steps[step.name].model, prompt, (line) => {
+        const runner = await getRunner(config.steps[step.name].sandbox)
+        output = await runner.runAgent(config.steps[step.name].agent, config.steps[step.name].model, prompt, (line) => {
           events.emit('line', line)
         })
       } catch (err) {

@@ -15,9 +15,11 @@
     "build": "tsup"
   },
   "dependencies": {
-    "dockerode": "^4.0.9",
     "ink": "^6.0.0",
-    "react": "^19.0.0",
+    "react": "^19.0.0"
+  },
+  "optionalDependencies": {
+    "dockerode": "^4.0.9",
     "tar-stream": "^3.1.7"
   },
   "devDependencies": {
