@@ -75,18 +75,10 @@ function findProjectRoot(): string {
   try {
     return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim()
   } catch {
-    console.error('Error: not inside a git repository. Run cook from within a git repo.')
-    process.exit(1)
+    return process.cwd()
   }
 }
 
-function tryFindProjectRoot(): string | null {
-  try {
-    return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim()
-  } catch {
-    return null
-  }
-}
 
 function usage(): void {
   console.error(`${BOLD}cook${RESET} — sandboxed agent loop
@@ -299,13 +291,6 @@ interface StepSelection {
 }
 
 const STEP_NAMES: StepName[] = ['work', 'review', 'gate']
-const FALLBACK_CONFIG: CookConfig = {
-  sandbox: 'agent',
-  env: ['CLAUDE_CODE_OAUTH_TOKEN'],
-  animation: 'strip',
-  agent: 'claude',
-  steps: { work: {}, review: {}, gate: {} },
-}
 
 function parseStepAgentArg(parsed: ParsedArgs, step: StepName): string | undefined {
   switch (step) {
@@ -429,13 +414,8 @@ function checkOpencodeAuth(config: CookConfig): { ok: boolean; msg: string } {
 async function cmdDoctor(args: string[]): Promise<void> {
   logPhase('Cook doctor')
 
-  const projectRoot = tryFindProjectRoot()
-  const config = projectRoot ? loadConfig(projectRoot) : FALLBACK_CONFIG
-  if (projectRoot) {
-    logOK(`Project detected: ${projectRoot}`)
-  } else {
-    logWarn('Not in a git repo; using default config for checks')
-  }
+  const projectRoot = findProjectRoot()
+  const config = loadConfig(projectRoot)
 
   const parsed = parseArgs(args)
   const plan = resolveAgentPlan(parsed, config)
