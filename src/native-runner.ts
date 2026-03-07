@@ -109,7 +109,7 @@ export class NativeRunner implements AgentRunner {
       case 'claude':
         return {
           cmd: 'claude',
-          args: ['--model', model, '-p', ...bypassFlags],
+          args: ['--model', model, '--permission-mode', 'acceptEdits', '-p', ...bypassFlags],
         }
       case 'codex':
         return {
