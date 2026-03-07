@@ -12,7 +12,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup"
+    "build": "rm -rf dist && tsup"
   },
   "dependencies": {
     "ink": "^6.0.0",
