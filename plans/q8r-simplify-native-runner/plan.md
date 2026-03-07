@@ -194,7 +194,7 @@ This means users who only use native mode never need Docker installed — the im
 
 ## Implementation Approach
 
-### Phase 1: Runner Interface & NativeRunner
+### Phase 1: Runner Interface & NativeRunner ✅
 
 1. **Create `src/runner.ts`** — `AgentRunner` interface, `SandboxMode` type, `RunnerPool` class
 2. **Create `src/native-runner.ts`** — `NativeRunner` class implementing `AgentRunner`
@@ -204,13 +204,13 @@ This means users who only use native mode never need Docker installed — the im
    - `protected getBypassFlags(agent): string[]` returns `[]` — no bypass flags
 3. **Create `src/bare-runner.ts`** — `BareRunner extends NativeRunner`, overrides `getBypassFlags()` to return `--dangerously-*` flags per agent
 
-### Phase 2: Refactor Existing Code
+### Phase 2: Refactor Existing Code ✅
 
 4. **Update `src/sandbox.ts`** — make `Sandbox` implement `AgentRunner` interface (already compatible, just add the `implements` clause)
 5. **Update `src/loop.ts`** — change `sandbox` parameter to `getRunner: (mode: SandboxMode) => Promise<AgentRunner>` callback, add `sandbox` to `LoopStepConfig`, resolve runner per step
 6. **Update `src/config.ts`** — add `sandbox` field to `CookConfig`, default to `'agent'`
 
-### Phase 3: CLI Integration
+### Phase 3: CLI Integration ✅
 
 7. **Update `src/cli.ts`**:
    - Add `--sandbox` flag parsing
@@ -234,7 +234,7 @@ This means users who only use native mode never need Docker installed — the im
 8. **Update `cook init`** — add `sandbox: "agent"` to generated config
 9. **Update `cook doctor`** — add native mode checks (agent CLI on PATH)
 
-### Phase 4: Cleanup
+### Phase 4: Cleanup ✅
 
 10. **Move Docker-specific imports** — ensure `dockerode` and `tar-stream` are not top-level imports in cli.ts
 11. **Update package.json** — mark `dockerode` and related types as optional peer dependencies (or keep as deps but document they're only needed for `--sandbox docker`)

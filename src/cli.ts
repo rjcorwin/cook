@@ -6,11 +6,13 @@ import os from 'os'
 import path from 'path'
 import React from 'react'
 import { render } from 'ink'
-import Docker from 'dockerode'
 import { loadConfig, type AgentName, type CookConfig, type StepName } from './config.js'
+import { RunnerPool, type SandboxMode } from './runner.js'
+import { NativeRunner } from './native-runner.js'
+import { BareRunner } from './bare-runner.js'
 import { loadCookMD, DEFAULT_COOK_MD } from './template.js'
-import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET, CYAN } from './log.js'
-import { startSandbox, rebuildBaseImage, type Sandbox } from './sandbox.js'
+import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET } from './log.js'
+// sandbox.js is imported dynamically to avoid loading dockerode when not needed
 import { agentLoop, loopEvents } from './loop.js'
 import { App } from './ui/App.js'
 
@@ -26,6 +28,7 @@ ITERATE if: there are High severity issues or the work is incomplete.`
 
 const DEFAULT_COOK_CONFIG_JSON = `{
   "agent": "claude",
+  "sandbox": "agent",
   "steps": {
     "work": {},
     "review": {},
@@ -46,7 +49,7 @@ const DEFAULT_COOK_DOCKERFILE = `FROM cook-sandbox
 #   RUN npm install -g typescript
 `
 
-let sandbox: Sandbox | null = null
+let pool: RunnerPool | null = null
 let inkInstance: { unmount: () => void } | null = null
 
 async function cleanup() {
@@ -54,9 +57,9 @@ async function cleanup() {
     inkInstance.unmount()
     inkInstance = null
   }
-  if (sandbox) {
-    await sandbox.stop()
-    sandbox = null
+  if (pool) {
+    await pool.stopAll()
+    pool = null
   }
 }
 
@@ -111,6 +114,7 @@ ${BOLD}Options:${RESET}
   --work-model MODEL              Work step model override
   --review-model MODEL            Review step model override
   --gate-model MODEL              Gate step model override
+  --sandbox MODE                  Sandbox mode (agent|docker|none, default: agent)
   --hide-request                  Hide the templated request for each step
   -h, --help                      Show this help`)
   process.exit(1)
@@ -149,6 +153,7 @@ function cmdInit(projectRoot: string): void {
 
 async function cmdRebuild(): Promise<void> {
   logPhase('Rebuild sandbox image')
+  const { rebuildBaseImage } = await import('./sandbox.js')
   await rebuildBaseImage()
 }
 
@@ -159,6 +164,7 @@ interface ParsedArgs {
   maxIterations: number
   model?: string
   agent?: string
+  sandbox?: SandboxMode
   workAgent?: string
   reviewAgent?: string
   gateAgent?: string
@@ -182,6 +188,7 @@ function parseArgs(args: string[]): ParsedArgs {
     '--review-model',
     '--gate-model',
     '--max-iterations',
+    '--sandbox',
   ])
   const BOOLEAN_FLAGS = new Set(['--hide-request'])
 
@@ -236,6 +243,12 @@ function parseArgs(args: string[]): ParsedArgs {
   const gatePrompt = flags['--gate'] ?? prompts[2] ?? DEFAULT_GATE_PROMPT
   const model = flags['--model']
   const agent = flags['--agent']
+  const sandboxFlag = flags['--sandbox']
+  const sandbox = (sandboxFlag === 'agent' || sandboxFlag === 'docker' || sandboxFlag === 'none') ? sandboxFlag : undefined
+  if (sandboxFlag !== undefined && sandbox === undefined) {
+    console.error(`Error: invalid sandbox mode "${sandboxFlag}". Expected one of: agent, docker, none.`)
+    process.exit(1)
+  }
   const workAgent = flags['--work-agent']
   const reviewAgent = flags['--review-agent']
   const gateAgent = flags['--gate-agent']
@@ -251,6 +264,7 @@ function parseArgs(args: string[]): ParsedArgs {
     maxIterations,
     model,
     agent,
+    sandbox,
     workAgent,
     reviewAgent,
     gateAgent,
@@ -281,10 +295,12 @@ function defaultModelForAgent(agent: AgentName): string {
 interface StepSelection {
   agent: AgentName
   model: string
+  sandbox: SandboxMode
 }
 
 const STEP_NAMES: StepName[] = ['work', 'review', 'gate']
 const FALLBACK_CONFIG: CookConfig = {
+  sandbox: 'agent',
   network: { mode: 'restricted', allowedHosts: [] },
   env: ['CLAUDE_CODE_OAUTH_TOKEN'],
   animation: 'strip',
@@ -318,7 +334,8 @@ function resolveStepSelection(
   const configStep = config.steps[step]
   const agent = parseAgent(parseStepAgentArg(parsed, step), configStep.agent ?? defaultAgent)
   const model = parseStepModelArg(parsed, step) ?? configStep.model ?? (agent === defaultAgent ? defaultModel : defaultModelForAgent(agent))
-  return { agent, model }
+  const sandbox = configStep.sandbox ?? parsed.sandbox ?? config.sandbox
+  return { agent, model, sandbox }
 }
 
 function resolveAgentPlan(parsed: ParsedArgs, config: CookConfig): {
@@ -360,7 +377,7 @@ function hostClaudeLoggedIn(): boolean {
   }
 }
 
-function checkClaudeAuth(config: CookConfig): { ok: boolean; msg: string } {
+function checkClaudeAuth(config: CookConfig, usedModes: Set<SandboxMode>): { ok: boolean; msg: string } {
   const home = os.homedir()
   if (hasFile(path.join(home, '.claude', '.credentials.json'))) {
     return { ok: true, msg: 'Claude auth: ~/.claude/.credentials.json found (portable)' }
@@ -372,9 +389,12 @@ function checkClaudeAuth(config: CookConfig): { ok: boolean; msg: string } {
     return { ok: false, msg: 'Claude auth: CLAUDE_CODE_OAUTH_TOKEN is set but missing from .cook.config.json env passthrough' }
   }
   if (hostClaudeLoggedIn()) {
-    return { ok: false, msg: 'Claude auth: host is logged in, but no portable token/credentials for container. Run `claude setup-token` and pass CLAUDE_CODE_OAUTH_TOKEN via config env.' }
+    if (usedModes.has('docker')) {
+      return { ok: false, msg: 'Claude auth: host is logged in but not portable to Docker. Run `claude login` to create ~/.claude/.credentials.json or set CLAUDE_CODE_OAUTH_TOKEN.' }
+    }
+    return { ok: true, msg: 'Claude auth: host is logged in (sufficient for native mode)' }
   }
-  return { ok: false, msg: 'Claude auth: no container-usable credentials detected' }
+  return { ok: false, msg: 'Claude auth: no credentials detected. Run `claude login` or set CLAUDE_CODE_OAUTH_TOKEN.' }
 }
 
 function checkCodexAuth(config: CookConfig): { ok: boolean; msg: string } {
@@ -388,7 +408,7 @@ function checkCodexAuth(config: CookConfig): { ok: boolean; msg: string } {
     }
     return { ok: false, msg: 'Codex auth: OPENAI_API_KEY is set but missing from .cook.config.json env passthrough' }
   }
-  return { ok: false, msg: 'Codex auth: no container-usable credentials detected' }
+  return { ok: false, msg: 'Codex auth: no credentials detected. Set OPENAI_API_KEY or run codex login.' }
 }
 
 function checkOpencodeAuth(config: CookConfig): { ok: boolean; msg: string } {
@@ -404,7 +424,7 @@ function checkOpencodeAuth(config: CookConfig): { ok: boolean; msg: string } {
     }
     return { ok: false, msg: `OpenCode auth: ${name} is set but missing from .cook.config.json env passthrough` }
   }
-  return { ok: false, msg: 'OpenCode auth: no container-usable credentials detected' }
+  return { ok: false, msg: 'OpenCode auth: no credentials detected. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.' }
 }
 
 async function cmdDoctor(args: string[]): Promise<void> {
@@ -428,25 +448,51 @@ async function cmdDoctor(args: string[]): Promise<void> {
 
   let allGood = true
 
-  const docker = new Docker()
-  try {
-    await docker.ping()
-    logOK('Docker daemon reachable')
-  } catch {
-    allGood = false
-    logErr('Docker daemon not reachable')
+  // Determine which sandbox modes are in use
+  const usedModes = new Set(STEP_NAMES.map(step => plan.stepConfig[step].sandbox))
+  logStep(`Sandbox modes: ${[...usedModes].join(', ')}`)
+
+  // Docker checks — only when docker mode is used
+  if (usedModes.has('docker')) {
+    try {
+      const Docker = (await import('dockerode')).default
+      const docker = new Docker()
+      try {
+        await docker.ping()
+        logOK('Docker daemon reachable')
+      } catch {
+        allGood = false
+        logErr('Docker daemon not reachable')
+      }
+      try {
+        await docker.getImage('cook-sandbox').inspect()
+        logOK('Base image cook-sandbox present')
+      } catch {
+        logWarn('Base image cook-sandbox not found (run `cook rebuild`)')
+      }
+    } catch {
+      allGood = false
+      logErr('dockerode not available')
+    }
   }
 
-  try {
-    await docker.getImage('cook-sandbox').inspect()
-    logOK('Base image cook-sandbox present')
-  } catch {
-    logWarn('Base image cook-sandbox not found (run `cook rebuild`)')
+  // Native mode checks — verify agent CLIs are on PATH
+  if (usedModes.has('agent') || usedModes.has('none')) {
+    for (const agent of plan.runAgents) {
+      if (agent === 'opencode') continue // opencode not supported in native/bare
+      try {
+        execSync(`which ${agent}`, { encoding: 'utf8' })
+        logOK(`${agent} CLI found on PATH`)
+      } catch {
+        allGood = false
+        logErr(`${agent} CLI not found on PATH`)
+      }
+    }
   }
 
   for (const agent of plan.runAgents) {
     const result = agent === 'claude'
-      ? checkClaudeAuth(config)
+      ? checkClaudeAuth(config, usedModes)
       : agent === 'codex'
       ? checkCodexAuth(config)
       : checkOpencodeAuth(config)
@@ -477,10 +523,14 @@ async function runLoop(args: string[]): Promise<void> {
   const config = loadConfig(projectRoot)
   const { defaultAgent, defaultModel, stepConfig, runAgents } = resolveAgentPlan(parsed, config)
 
+  const usedModes = [...new Set(STEP_NAMES.map(step => stepConfig[step].sandbox))]
+  const sandboxLabel = usedModes.length === 1 ? usedModes[0] : usedModes.join(', ')
+
   const bannerLines = [
     `${BOLD}cook${RESET} — agent loop`,
     ``,
     `  Default:     ${defaultAgent}:${defaultModel}`,
+    `  Sandbox:     ${sandboxLabel}`,
     `  Work:        ${stepConfig.work.agent}:${stepConfig.work.model}`,
     `  Review:      ${stepConfig.review.agent}:${stepConfig.review.model}`,
     `  Gate:        ${stepConfig.gate.agent}:${stepConfig.gate.model}`,
@@ -498,13 +548,19 @@ async function runLoop(args: string[]): Promise<void> {
   }
   console.error(`└─${'─'.repeat(maxLen)}─┘`)
 
-  const docker = new Docker()
-  try {
-    sandbox = await startSandbox(docker, projectRoot, config, runAgents)
-  } catch (err) {
-    logErr(`Sandbox failed: ${err}`)
-    process.exit(1)
-  }
+  pool = new RunnerPool(async (mode: SandboxMode) => {
+    switch (mode) {
+      case 'agent':
+        return new NativeRunner(projectRoot, config.env)
+      case 'docker': {
+        const Docker = (await import('dockerode')).default
+        const { startSandbox } = await import('./sandbox.js')
+        return startSandbox(new Docker(), projectRoot, config, runAgents)
+      }
+      case 'none':
+        return new BareRunner(projectRoot, config.env)
+    }
+  })
 
   try {
     const cookMD = loadCookMD(projectRoot)
@@ -520,7 +576,7 @@ async function runLoop(args: string[]): Promise<void> {
     )
     inkInstance = { unmount }
 
-    await agentLoop(sandbox, {
+    await agentLoop(pool.get.bind(pool), {
       workPrompt: parsed.workPrompt,
       reviewPrompt: parsed.reviewPrompt,
       gatePrompt: parsed.gatePrompt,

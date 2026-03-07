@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { logWarn } from './log.js'
+import type { SandboxMode } from './runner.js'
 
 export type AnimationStyle = 'flame' | 'strip' | 'campfire' | 'pot' | 'pulse'
 export type AgentName = 'claude' | 'codex' | 'opencode'
@@ -9,9 +10,11 @@ export type StepName = 'work' | 'review' | 'gate'
 export interface StepAgentConfig {
   agent?: AgentName
   model?: string
+  sandbox?: SandboxMode
 }
 
 export interface CookConfig {
+  sandbox: SandboxMode
   network: {
     mode: 'restricted' | 'unrestricted'
     allowedHosts: string[]
@@ -31,18 +34,24 @@ function isAgentName(value: unknown): value is AgentName {
   return value === 'claude' || value === 'codex' || value === 'opencode'
 }
 
+function isSandboxMode(value: unknown): value is SandboxMode {
+  return value === 'agent' || value === 'docker' || value === 'none'
+}
+
 function parseStepAgentConfig(value: unknown): StepAgentConfig {
   if (!value || typeof value !== 'object') return {}
-  const step = value as { agent?: unknown, model?: unknown }
+  const step = value as { agent?: unknown, model?: unknown, sandbox?: unknown }
   const parsed: StepAgentConfig = {}
   if (isAgentName(step.agent)) parsed.agent = step.agent
   if (typeof step.model === 'string' && step.model.trim().length > 0) parsed.model = step.model
+  if (isSandboxMode(step.sandbox)) parsed.sandbox = step.sandbox
   return parsed
 }
 
 export function loadConfig(projectRoot: string): CookConfig {
   const configPath = path.join(projectRoot, '.cook.config.json')
   const defaults: CookConfig = {
+    sandbox: 'agent',
     network: { mode: 'restricted', allowedHosts: [] },
     env: ['CLAUDE_CODE_OAUTH_TOKEN'],
     animation: 'strip',
@@ -71,7 +80,9 @@ export function loadConfig(projectRoot: string): CookConfig {
       review: parseStepAgentConfig(parsed.steps?.review),
       gate: parseStepAgentConfig(parsed.steps?.gate),
     }
+    const sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
     return {
+      sandbox,
       network: { mode: networkMode, allowedHosts },
       env,
       animation,
