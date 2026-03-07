@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
-import type { Sandbox } from './sandbox.js'
+import type { RunnerPool } from './runner-pool.js'
+import type { SandboxMode } from './runner.js'
 import { renderTemplate, type LoopContext } from './template.js'
 import { createSessionLog, appendToLog, logOK, logWarn } from './log.js'
 import type { AgentName, StepName } from './config.js'
@@ -7,6 +8,7 @@ import type { AgentName, StepName } from './config.js'
 interface LoopStepConfig {
   agent: AgentName
   model: string
+  sandbox?: SandboxMode
 }
 
 export interface LoopConfig {
@@ -14,6 +16,7 @@ export interface LoopConfig {
   reviewPrompt: string
   gatePrompt: string
   steps: Record<StepName, LoopStepConfig>
+  defaultSandbox: SandboxMode
   maxIterations: number
   projectRoot: string
 }
@@ -22,7 +25,7 @@ const DONE_KEYWORDS = ['DONE', 'PASS', 'COMPLETE', 'APPROVE', 'ACCEPT']
 const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY']
 
 export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
-  for (const line of output.split('\n')) {
+  for (const line of output.split(/\r?\n/)) {
     const upper = line.trim().toUpperCase()
     if (DONE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'DONE'
     if (ITERATE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'ITERATE'
@@ -33,7 +36,7 @@ export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
 export const loopEvents = new EventEmitter()
 
 export async function agentLoop(
-  sandbox: Sandbox,
+  pool: RunnerPool,
   config: LoopConfig,
   cookMD: string,
   events: EventEmitter,
@@ -51,11 +54,14 @@ export async function agentLoop(
     ]
 
     for (const step of steps) {
+      const stepConfig = config.steps[step.name]
+      const sandboxMode = stepConfig.sandbox ?? config.defaultSandbox
+
       events.emit('step', {
         step: step.name,
         iteration: i,
-        agent: config.steps[step.name].agent,
-        model: config.steps[step.name].model,
+        agent: stepConfig.agent,
+        model: stepConfig.model,
       })
 
       let output: string
@@ -69,8 +75,9 @@ export async function agentLoop(
           logFile,
         })
 
+        const runner = await pool.get(sandboxMode)
         events.emit('prompt', prompt)
-        output = await sandbox.runAgent(config.steps[step.name].agent, config.steps[step.name].model, prompt, (line) => {
+        output = await runner.runAgent(stepConfig.agent, stepConfig.model, prompt, (line) => {
           events.emit('line', line)
         })
       } catch (err) {

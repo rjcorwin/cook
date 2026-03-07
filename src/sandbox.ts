@@ -2,11 +2,19 @@ import Docker from 'dockerode'
 import { pack } from 'tar-stream'
 import { PassThrough, type Readable } from 'stream'
 import { createHash } from 'crypto'
-import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import type { AgentName, CookConfig } from './config.js'
+import type { AgentName } from './config.js'
+import type { AgentRunner } from './runner.js'
+import { gitConfig } from './agent-utils.js'
+
+export interface DockerConfig {
+  network: {
+    mode: 'restricted' | 'bridge' | 'none'
+    allowedHosts: string[]
+  }
+}
 import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
 
@@ -100,7 +108,9 @@ async function buildImage(docker: Docker, imageName: string, dockerfile: string,
 }
 
 function getProjectImageTag(projectRoot: string): { imageName: string, dockerfile: string } | null {
-  const dockerfilePath = path.join(projectRoot, '.cook.Dockerfile')
+  const newPath = path.join(projectRoot, '.cook', 'Dockerfile')
+  const legacyPath = path.join(projectRoot, '.cook.Dockerfile')
+  const dockerfilePath = fs.existsSync(newPath) ? newPath : legacyPath
   let data: Buffer
   try {
     data = fs.readFileSync(dockerfilePath) as Buffer
@@ -133,6 +143,7 @@ async function copyFileToContainer(container: Docker.Container, hostPath: string
   try {
     data = fs.readFileSync(hostPath) as Buffer
   } catch {
+    logWarn(`Auth file not found on host: ${hostPath} — skipping`)
     return
   }
   const dir = path.dirname(containerPath)
@@ -163,15 +174,6 @@ function hasClaudeContainerCredentials(): boolean {
   return fs.existsSync(path.join(home, '.claude', '.credentials.json'))
 }
 
-function gitConfig(key: string, fallback: string): string {
-  try {
-    const out = execSync(`git config ${key}`, { encoding: 'utf8' }).trim()
-    return out || fallback
-  } catch {
-    return fallback
-  }
-}
-
 function requiredHostsForAgent(agent: AgentName): string[] {
   switch (agent) {
     case 'claude':
@@ -188,8 +190,15 @@ function requiredHostsForAgents(agents: AgentName[]): string[] {
   return [...new Set(agents.flatMap(requiredHostsForAgent))]
 }
 
+const VALID_HOSTNAME = /^[a-zA-Z0-9._-]+$/
+
 function generateIptablesScript(agents: AgentName[], allowedHosts: string[]): string {
   const hosts = [...new Set([...requiredHostsForAgents(agents), ...allowedHosts])]
+  for (const h of hosts) {
+    if (!VALID_HOSTNAME.test(h)) {
+      throw new Error(`Invalid hostname in allowedHosts: "${h}". Hostnames must match /^[a-zA-Z0-9._-]+$/.`)
+    }
+  }
   const hostList = hosts.join(' ')
 
   return `set -e
@@ -267,8 +276,13 @@ async function runAgent(
   })
 
   const stderrChunks: Buffer[] = []
+  let stderrLen = 0
+  const STDERR_MAX = 1024 * 1024 // 1 MB
   stderr.on('data', (chunk: Buffer) => {
-    stderrChunks.push(chunk)
+    if (stderrLen < STDERR_MAX) {
+      stderrChunks.push(chunk)
+      stderrLen += chunk.length
+    }
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -298,7 +312,7 @@ async function runAgent(
   return output
 }
 
-export class Sandbox {
+export class DockerSandbox implements AgentRunner {
   constructor(
     private docker: Docker,
     private container: Docker.Container,
@@ -311,13 +325,13 @@ export class Sandbox {
     return runAgent(this.container, this.docker, agent, model, prompt, this.userSpec, this.env, this.projectRoot, onLine)
   }
 
-  async stop(): Promise<void> {
+  async cleanup(): Promise<void> {
     await this.container.remove({ force: true }).catch(() => {})
     logOK('Sandbox stopped')
   }
 }
 
-export async function startSandbox(docker: Docker, projectRoot: string, config: CookConfig, agents: AgentName[]): Promise<Sandbox> {
+export async function startSandbox(docker: Docker, projectRoot: string, config: DockerConfig, env: string[], agents: AgentName[]): Promise<DockerSandbox> {
   try {
     await docker.ping()
   } catch {
@@ -342,22 +356,23 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
     imageName = projImage.imageName
   }
 
-  const uid = process.getuid!().toString()
-  const gid = process.getgid!().toString()
+  if (typeof process.getuid !== 'function' || typeof process.getgid !== 'function') {
+    console.error('Error: Docker sandbox requires process.getuid/getgid (not available on Windows). Use WSL or a Linux host.')
+    process.exit(1)
+  }
+  const uid = process.getuid().toString()
+  const gid = process.getgid().toString()
   const userSpec = `${uid}:${gid}`
 
   const gitName = gitConfig('user.name', 'cook')
   const gitEmail = gitConfig('user.email', 'cook@localhost')
-  const env = [
+  const containerEnv = [
     `GIT_AUTHOR_NAME=${gitName}`,
     `GIT_AUTHOR_EMAIL=${gitEmail}`,
     `GIT_COMMITTER_NAME=${gitName}`,
     `GIT_COMMITTER_EMAIL=${gitEmail}`,
+    ...env,
   ]
-  for (const varName of config.env) {
-    const val = process.env[varName]
-    if (val !== undefined) env.push(`${varName}=${val}`)
-  }
 
   const containerName = `cook-${process.pid}`
   const container = await docker.createContainer({
@@ -367,7 +382,8 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
     Labels: { 'cook.project': projectRoot },
     HostConfig: {
       Binds: [`${projectRoot}:${projectRoot}`],
-      CapAdd: config.network.mode !== 'unrestricted' ? ['NET_ADMIN'] : [],
+      CapAdd: config.network.mode === 'restricted' ? ['NET_ADMIN'] : [],
+      NetworkMode: config.network.mode === 'none' ? 'none' : undefined,
     },
   })
 
@@ -383,7 +399,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   await copyAuthFiles(container, userSpec)
 
-  if (config.network.mode !== 'unrestricted') {
+  if (config.network.mode === 'restricted') {
     logStep('Applying network restrictions...')
     const script = generateIptablesScript(agents, config.network.allowedHosts)
     await containerExec(container, 'root', ['sh', '-c', script])
@@ -393,7 +409,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, config: 
 
   logOK(`Sandbox started (container: ${containerName})`)
 
-  return new Sandbox(docker, container, userSpec, env, projectRoot)
+  return new DockerSandbox(docker, container, userSpec, containerEnv, projectRoot)
 }
 
 export { BASE_IMAGE_NAME, BASE_DOCKERFILE, buildImage }
