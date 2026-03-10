@@ -24,7 +24,7 @@ cook "Implement dark mode"
 
 ```sh
 cook \
-  "Implement dark mode" # Work prompt \
+  "Implement dark mode" # work prompt \
   "Review the implementation. Categorize findings by High/Medium/Low." # review prompt \
   "Reply DONE if no High findings remain; otherwise ITERATE." # gate prompt \
   5 # max iterations
