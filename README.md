@@ -23,8 +23,9 @@ cook "Implement dark mode"
 `cook` runs Claude, Codex, or OpenCode in a work → review → gate loop, iterating automatically until the agent is satisfied or your max iterations are hit. Agents run natively by default, using their own OS-level sandboxes — no Docker required. Get even fancier by defining what to review and the criteria for done:
 
 ```sh
-cook "Implement dark mode" # Work prompt \
-  "Review the implementation. Check for visual regressions and missing theme variables. Categorize findings by High/Medium/Low." # review prompt \
+cook \
+  "Implement dark mode" # Work prompt \
+  "Review the implementation. Categorize findings by High/Medium/Low." # review prompt \
   "Reply DONE if no High findings remain; otherwise ITERATE." # gate prompt \
   5 # max iterations
 ```
