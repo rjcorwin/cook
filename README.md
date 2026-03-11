@@ -34,7 +34,7 @@ Have an existing plan you want to have cook work on one step at a time? Embed co
 
 ```sh
 # Ralph loop for a 3 step plan with an embedded cook loop.
-for step in {1..3}; do cook "Read plan.md. Implement step $step and then write a devlog per CONTRIBUTING.md"; done
+for step in {1..3}; do cook "Implement step $step in plan.md"; done
 ```
 
 ## Prerequisites
