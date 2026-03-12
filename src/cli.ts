@@ -15,6 +15,7 @@ import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET } from './log.js
 // sandbox.js is imported dynamically to avoid loading dockerode when not needed
 import { agentLoop, loopEvents } from './loop.js'
 import { App } from './ui/App.js'
+import { runRace } from './race.js'
 
 const DEFAULT_REVIEW_PROMPT = `Review the work done in the previous step.
 Check the session log for what changed.
@@ -39,6 +40,7 @@ const DEFAULT_COOK_CONFIG_JSON = `{
 `
 
 const DEFAULT_COOK_GITIGNORE = `logs/
+race/
 `
 
 const DEFAULT_COOK_DOCKERFILE = `FROM cook-sandbox
@@ -88,6 +90,7 @@ ${BOLD}Usage:${RESET}
   cook "work" "review" "gate"    Custom prompts for each step
   cook "work" 5                  Run with 5 max iterations
   cook "work" "review" "gate" 5  All custom prompts + iterations
+  cook race N "work"              Race N parallel runs, judge the best
   cook init                       Set up COOK.md, config, and Dockerfile
   cook rebuild                    Rebuild the sandbox Docker image
   cook doctor                     Check Docker + auth readiness
@@ -571,6 +574,45 @@ async function runLoop(args: string[]): Promise<void> {
   }
 }
 
+async function cmdRace(raceArgs: string[]): Promise<void> {
+  const n = parseInt(raceArgs[0], 10)
+  if (!n || n < 2) {
+    logErr('Usage: cook race N "prompt" (N must be >= 2)')
+    process.exit(1)
+  }
+
+  const remaining = raceArgs.slice(1)
+  const projectRoot = findProjectRoot()
+
+  // Verify we're in a git repo (worktrees require it)
+  try {
+    execSync('git rev-parse --is-inside-work-tree', { cwd: projectRoot, stdio: 'pipe' })
+  } catch {
+    logErr('cook race requires a git repository (for worktree isolation)')
+    process.exit(1)
+  }
+
+  const parsed = parseArgs(remaining)
+  if (!parsed.workPrompt) {
+    logErr('Usage: cook race N "prompt"')
+    process.exit(1)
+  }
+
+  const config = loadConfig(projectRoot)
+  const { stepConfig, runAgents } = resolveAgentPlan(parsed, config)
+
+  await runRace(n, projectRoot, {
+    workPrompt: parsed.workPrompt,
+    reviewPrompt: parsed.reviewPrompt,
+    gatePrompt: parsed.gatePrompt,
+    maxIterations: parsed.maxIterations,
+    stepConfig,
+    config,
+    runAgents,
+    showRequest: parsed.showRequest,
+  })
+}
+
 const args = process.argv.slice(2)
 const command = args[0]
 
@@ -579,6 +621,7 @@ async function main() {
     case 'init':    cmdInit(findProjectRoot()); break
     case 'rebuild': await cmdRebuild(); break
     case 'doctor':  await cmdDoctor(args.slice(1)); break
+    case 'race':    await cmdRace(args.slice(1)); break
     case 'help':
     case '--help':
     case '-h':      usage(); break
