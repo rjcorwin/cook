@@ -14,8 +14,6 @@ export const DEFAULT_COOK_MD = `# COOK.md
 
 ## Project Instructions
 
-[Edit this section with your project's conventions, coding standards, etc.]
-
 ## Agent Loop
 
 Step: **\${step}** | Iteration: \${iteration}/\${maxIterations}
