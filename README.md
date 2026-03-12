@@ -135,7 +135,13 @@ To disable network restrictions entirely (not recommended):
 
 ## Configuration
 
-All config lives in the `.cook/` directory (created by `cook init`):
+Run `cook init` in your project root to scaffold the configuration files:
+
+```sh
+cook init
+```
+
+This creates:
 
 - `COOK.md` — Project instructions and agent loop template (JS template literal syntax). Lives in the project root for visibility.
 - `.cook/config.json` — Default agent/model/sandbox, per-step overrides, and environment variable passthrough.
@@ -169,6 +175,46 @@ Example `.cook/config.json`:
 The `env` array controls which environment variables from your host are forwarded to the agent process. In Docker mode, these are injected into the container; in agent/none mode, they're passed to the spawned process. Auth tokens like `CLAUDE_CODE_OAUTH_TOKEN` and `OPENAI_API_KEY` need to be listed here for agents to authenticate.
 
 CLI defaults (`--agent`, `--model`, `--sandbox`) override config defaults for a single run. Step flags (`--work-agent`, `--review-agent`, `--gate-agent`, `--work-model`, `--review-model`, `--gate-model`) override both. Per-step `sandbox` in config overrides the global sandbox mode.
+
+## COOK.md
+
+`COOK.md` lives in your project root and does two things: it holds project-level instructions for the agent, and it defines the template used to construct the prompt sent to the agent at each step.
+
+When `cook` runs, it renders `COOK.md` as a JavaScript template literal, injecting these variables:
+
+| Variable | Description |
+|----------|-------------|
+| `${step}` | Current step name: `work`, `review`, or `gate` |
+| `${prompt}` | The prompt for this step (work/review/gate) |
+| `${lastMessage}` | Output from the previous step (empty on first work step) |
+| `${iteration}` | Current iteration number |
+| `${maxIterations}` | Max iterations configured |
+| `${logFile}` | Path to the session log file |
+
+The default template (used when no `COOK.md` exists):
+
+```md
+# COOK.md
+
+## Project Instructions
+
+## Agent Loop
+
+Step: **${step}** | Iteration: ${iteration}/${maxIterations}
+
+### Task
+${prompt}
+
+${lastMessage ? '### Previous Output\n' + lastMessage : ''}
+
+### History
+Session log: ${logFile}
+Read the session log for full context from previous steps.
+```
+
+Edit the `## Project Instructions` section to give the agent context about your project — stack, conventions, constraints, etc. The `## Agent Loop` section controls the structure of the prompt sent at each step.
+
+Backticks and bare `$` in your `COOK.md` are escaped automatically so they don't break the template. To emit a literal `${...}` in the rendered output, write `\${...}` in `COOK.md`.
 
 ## Options
 
