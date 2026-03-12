@@ -99,39 +99,12 @@ Cook supports three sandbox modes via `--sandbox`:
 | Mode | Flag | Description |
 |------|------|-------------|
 | **Agent** (default) | `--sandbox agent` | Spawns agents natively. Agents use their own OS-level sandboxes (Claude's Seatbelt/Landlock, Codex's workspace sandbox). No Docker required. |
-| **Docker** | `--sandbox docker` | Runs agents inside a Docker container with network restrictions. Full isolation. |
+| **Docker** | `--sandbox docker` | Runs agents inside a Docker container with network restrictions. Full isolation. See Docker mode details in Configuration for network and image options. |
 | **None** | `--sandbox none` | Spawns agents natively with all safety bypassed (`--dangerously-skip-permissions` etc.). Use with caution. |
 
 You can also set the sandbox mode per-step in `.cook/config.json` (see Configuration below).
 
 > **Note:** OpenCode is only supported in Docker mode — it has no OS-level sandbox.
-
-### Docker mode details
-
-When using `--sandbox docker`, the agent runs inside a Docker container — it can freely read and write your project files, but it cannot touch anything else on your host machine.
-
-Network access is restricted by default using `iptables` inside the container. Only outbound HTTPS to the agent's API endpoint is allowed (e.g. `api.anthropic.com` for Claude). Everything else — including Google, npm, GitHub, etc. — is blocked unless explicitly added to `allowedHosts`.
-
-To allow additional hosts, create `.cook/docker.json`:
-
-```json
-{
-  "network": {
-    "mode": "restricted",
-    "allowedHosts": ["registry.npmjs.org", "api.github.com"]
-  }
-}
-```
-
-To disable network restrictions entirely (not recommended):
-
-```json
-{
-  "network": {
-    "mode": "unrestricted"
-  }
-}
-```
 
 ## Configuration
 
@@ -175,6 +148,33 @@ Example `.cook/config.json`:
 The `env` array controls which environment variables from your host are forwarded to the agent process. In Docker mode, these are injected into the container; in agent/none mode, they're passed to the spawned process. Auth tokens like `CLAUDE_CODE_OAUTH_TOKEN` and `OPENAI_API_KEY` need to be listed here for agents to authenticate.
 
 CLI defaults (`--agent`, `--model`, `--sandbox`) override config defaults for a single run. Step flags (`--work-agent`, `--review-agent`, `--gate-agent`, `--work-model`, `--review-model`, `--gate-model`) override both. Per-step `sandbox` in config overrides the global sandbox mode.
+
+### Docker mode details
+
+When using `--sandbox docker`, the agent runs inside a Docker container — it can freely read and write your project files, but it cannot touch anything else on your host machine.
+
+Network access is restricted by default using `iptables` inside the container. Only outbound HTTPS to the agent's API endpoint is allowed (e.g. `api.anthropic.com` for Claude). Everything else — including Google, npm, GitHub, etc. — is blocked unless explicitly added to `allowedHosts`.
+
+To allow additional hosts, create `.cook/docker.json`:
+
+```json
+{
+  "network": {
+    "mode": "restricted",
+    "allowedHosts": ["registry.npmjs.org", "api.github.com"]
+  }
+}
+```
+
+To disable network restrictions entirely (not recommended):
+
+```json
+{
+  "network": {
+    "mode": "unrestricted"
+  }
+}
+```
 
 ## COOK.md
 
