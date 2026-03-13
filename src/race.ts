@@ -156,6 +156,14 @@ export async function runRace(
   logStep(`Session: ${session}`)
   logStep(`Isolation: git worktrees`)
 
+  // Ensure HEAD exists (empty repos have no commits yet)
+  try {
+    execSync('git rev-parse HEAD', { cwd: projectRoot, stdio: 'pipe' })
+  } catch {
+    logStep('No commits yet — creating initial empty commit')
+    execSync('git commit --allow-empty -m "initial (cook race)"', { cwd: projectRoot, stdio: 'pipe' })
+  }
+
   // Create worktrees
   const worktrees: { worktreePath: string; branchName: string }[] = []
   for (let i = 1; i <= n; i++) {
