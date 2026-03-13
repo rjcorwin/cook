@@ -29,6 +29,7 @@ interface RaceRunConfig {
   config: CookConfig
   runAgents: AgentName[]
   showRequest: boolean
+  judgePrompt?: string
 }
 
 interface RunResult {
@@ -103,7 +104,7 @@ Consider: correctness, completeness, code quality, and whether the gate passed.
 
 Respond with PICK <N> on its own line (e.g. PICK 2), followed by a brief explanation of why this run is the best.`
 
-function buildJudgePrompt(results: RunResult[]): string {
+function buildJudgePrompt(results: RunResult[], customJudgePrompt?: string): string {
   const logs = results
     .filter(r => r.status === 'done')
     .map(r => {
@@ -112,7 +113,11 @@ function buildJudgePrompt(results: RunResult[]): string {
     })
     .join('\n\n')
 
-  return `${JUDGE_PROMPT}\n\n${logs}`
+  const preamble = customJudgePrompt
+    ? `${JUDGE_PROMPT}\n\nAdditional judging criteria: ${customJudgePrompt}`
+    : JUDGE_PROMPT
+
+  return `${preamble}\n\n${logs}`
 }
 
 function parseJudgeVerdict(output: string, maxRun: number): number | null {
@@ -249,7 +254,7 @@ export async function runRace(
   logPhase('Judging runs')
   logStep('Spawning judge agent to compare results...')
 
-  const judgePrompt = buildJudgePrompt(results)
+  const judgePrompt = buildJudgePrompt(results, raceConfig.judgePrompt)
   const gateStep = raceConfig.stepConfig.gate
   const judgePool = createRunnerPool(projectRoot, raceConfig.config, raceConfig.runAgents)
 
