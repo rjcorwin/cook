@@ -15,6 +15,7 @@ import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET } from './log.js
 // sandbox.js is imported dynamically to avoid loading dockerode when not needed
 import { agentLoop, loopEvents } from './loop.js'
 import { App } from './ui/App.js'
+import { runRace } from './race.js'
 
 const DEFAULT_REVIEW_PROMPT = `Review the work done in the previous step.
 Check the session log for what changed.
@@ -39,6 +40,7 @@ const DEFAULT_COOK_CONFIG_JSON = `{
 `
 
 const DEFAULT_COOK_GITIGNORE = `logs/
+race/
 `
 
 const DEFAULT_COOK_DOCKERFILE = `FROM cook-sandbox
@@ -88,6 +90,9 @@ ${BOLD}Usage:${RESET}
   cook "work" "review" "gate"    Custom prompts for each step
   cook "work" 5                  Run with 5 max iterations
   cook "work" "review" "gate" 5  All custom prompts + iterations
+  cook "work" x3                  Race 3 parallel runs, judge the best
+  cook "work" x3 "judge criteria" Race with custom judge instructions
+  cook race 3 "work"              Race (explicit syntax)
   cook init                       Set up COOK.md, config, and Dockerfile
   cook rebuild                    Rebuild the sandbox Docker image
   cook doctor                     Check Docker + auth readiness
@@ -571,6 +576,111 @@ async function runLoop(args: string[]): Promise<void> {
   }
 }
 
+async function cmdRaceFromMultiplier(n: number, remaining: string[], judgePrompt?: string): Promise<void> {
+  const projectRoot = findProjectRoot()
+
+  try {
+    execSync('git rev-parse --is-inside-work-tree', { cwd: projectRoot, stdio: 'pipe' })
+  } catch {
+    logErr('cook race requires a git repository (for worktree isolation)')
+    process.exit(1)
+  }
+
+  const parsed = parseArgs(remaining)
+  if (!parsed.workPrompt) {
+    logErr('Work prompt is required')
+    process.exit(1)
+  }
+
+  const config = loadConfig(projectRoot)
+  const { stepConfig, runAgents } = resolveAgentPlan(parsed, config)
+
+  await runRace(n, projectRoot, {
+    workPrompt: parsed.workPrompt,
+    reviewPrompt: parsed.reviewPrompt,
+    gatePrompt: parsed.gatePrompt,
+    maxIterations: parsed.maxIterations,
+    stepConfig,
+    config,
+    runAgents,
+    showRequest: parsed.showRequest,
+    judgePrompt,
+  })
+}
+
+async function cmdRace(raceArgs: string[]): Promise<void> {
+  const n = parseInt(raceArgs[0], 10)
+  if (!n || n < 2) {
+    logErr('Usage: cook race N "prompt" (N must be >= 2)')
+    process.exit(1)
+  }
+
+  const remaining = raceArgs.slice(1)
+  const projectRoot = findProjectRoot()
+
+  // Verify we're in a git repo (worktrees require it)
+  try {
+    execSync('git rev-parse --is-inside-work-tree', { cwd: projectRoot, stdio: 'pipe' })
+  } catch {
+    logErr('cook race requires a git repository (for worktree isolation)')
+    process.exit(1)
+  }
+
+  const parsed = parseArgs(remaining)
+  if (!parsed.workPrompt) {
+    logErr('Usage: cook race N "prompt"')
+    process.exit(1)
+  }
+
+  const config = loadConfig(projectRoot)
+  const { stepConfig, runAgents } = resolveAgentPlan(parsed, config)
+
+  await runRace(n, projectRoot, {
+    workPrompt: parsed.workPrompt,
+    reviewPrompt: parsed.reviewPrompt,
+    gatePrompt: parsed.gatePrompt,
+    maxIterations: parsed.maxIterations,
+    stepConfig,
+    config,
+    runAgents,
+    showRequest: parsed.showRequest,
+  })
+}
+
+/** Scan args for an xN multiplier (e.g. x3). Returns null if not found. */
+function extractRaceMultiplier(args: string[]): { n: number; before: string[]; judgePrompt?: string } | null {
+  for (let i = 0; i < args.length; i++) {
+    const match = args[i].match(/^x(\d+)$/i)
+    if (match) {
+      const n = parseInt(match[1], 10)
+      if (n >= 2) {
+        const before = args.slice(0, i)
+        // Everything after xN that isn't a flag is the judge prompt
+        const after = args.slice(i + 1)
+        // Find first non-flag positional arg after xN as judge prompt
+        let judgePrompt: string | undefined
+        const remaining: string[] = []
+        for (let j = 0; j < after.length; j++) {
+          if (after[j].startsWith('--')) {
+            remaining.push(after[j])
+            // If it's a value flag, grab next arg too
+            if (j + 1 < after.length && !after[j + 1].startsWith('--')) {
+              remaining.push(after[j + 1])
+              j++
+            }
+          } else if (judgePrompt === undefined) {
+            judgePrompt = after[j]
+          } else {
+            remaining.push(after[j])
+          }
+        }
+        return { n, before: [...before, ...remaining], judgePrompt }
+      }
+    }
+  }
+  return null
+}
+
 const args = process.argv.slice(2)
 const command = args[0]
 
@@ -579,11 +689,21 @@ async function main() {
     case 'init':    cmdInit(findProjectRoot()); break
     case 'rebuild': await cmdRebuild(); break
     case 'doctor':  await cmdDoctor(args.slice(1)); break
+    case 'race':    await cmdRace(args.slice(1)); break
     case 'help':
     case '--help':
     case '-h':      usage(); break
     case undefined:  usage(); break
-    default:        await runLoop(args); break
+    default: {
+      // Check for xN multiplier syntax: cook "prompt" x3 "judge instructions"
+      const race = extractRaceMultiplier(args)
+      if (race) {
+        await cmdRaceFromMultiplier(race.n, race.before, race.judgePrompt)
+      } else {
+        await runLoop(args)
+      }
+      break
+    }
   }
 }
 
