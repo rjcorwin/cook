@@ -13,19 +13,19 @@ You:   Hey Agent, fix your work.
 Agent: Fixed! 
 ```
 
-Issue the task once and __let it cook__:
+__Let it cook__, reviewing and iterating until actually done:
 
 ```sh
 cook "Implement dark mode"
 ```
 
-Or race 3 parallel runs and let AI pick the best:
+Run parallel cook loops, AI picks the best:
 
 ```sh
 cook "Implement dark mode" x3 "pick least code, cleanest implementation"
 ```
 
-`cook` runs Claude, Codex, or OpenCode in a work → review → gate loop, iterating automatically until the agent is satisfied or your max iterations are hit. Agents run natively by default, using their own OS-level sandboxes — no Docker required. Get even fancier by defining what to review and the criteria for done:
+Define the review and done criteria:
 
 ```sh
 cook \
@@ -35,7 +35,7 @@ cook \
   5 # max iterations
 ```
 
-Have an existing plan you want to have cook work on one step at a time? Embed cook in a ralph loop.
+Ralph loop through a 3 step plan.
 
 ```sh
 # Ralph loop for a 3 step plan with an embedded cook loop.
