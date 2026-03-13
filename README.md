@@ -67,6 +67,12 @@ Basic run:
 cook "Create a space cat themed todo app in a single index.html"
 ```
 
+Race 3 parallel runs and let a judge pick the best:
+
+```sh
+cook "Refactor the checkout flow to reduce steps" x3 "fewest lines changed, cleanest diff"
+```
+
 Per-step agent/model overrides (for one run):
 
 ```sh
