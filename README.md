@@ -82,6 +82,34 @@ Doctor checks using the same override logic:
 cook doctor --work-agent codex --review-agent claude
 ```
 
+## Race mode
+
+Race N parallel runs of the same task in isolated git worktrees, then let a judge agent pick the best result and merge it:
+
+```sh
+cook "Add dark mode" x3
+```
+
+Add custom judging criteria after the multiplier:
+
+```sh
+cook "Add dark mode" x3 "least code wins"
+```
+
+All the usual flags work alongside `x3`:
+
+```sh
+cook "Add dark mode" x3 "least code wins" --agent codex --max-iterations 5
+```
+
+There's also an explicit syntax:
+
+```sh
+cook race 3 "Add dark mode"
+```
+
+Each run gets its own git worktree branched from HEAD. After all runs complete, a judge agent reads every session log side-by-side and responds with `PICK N`. The winning branch is merged into your current branch, and the worktrees are cleaned up.
+
 ## How it works
 
 1. **Work** — The selected agent executes your prompt in your project directory.
@@ -221,6 +249,9 @@ Backticks and bare `$` in your `COOK.md` are escaped automatically so they don't
 ```
 cook "prompt"                   Run the work/review/gate loop
 cook "prompt" 5                 Run with 5 max iterations
+cook "prompt" x3                Race 3 parallel runs, judge the best
+cook "prompt" x3 "criteria"    Race with custom judge instructions
+cook race 3 "prompt"            Race (explicit syntax)
 cook init                       Set up COOK.md, config, and Dockerfile
 cook rebuild                    Rebuild the sandbox Docker image
 cook doctor                     Check agent CLI, Docker, + auth readiness
