@@ -1,6 +1,6 @@
 # cook
 
-Do you often find yourself in this loop?
+Do you often find yourself in this loop with claude, codex, or opencode?
 
 ```
 You:   Hey Agent, implement dark mode.
