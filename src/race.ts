@@ -222,6 +222,20 @@ export async function runRace(
     await pool.stopAll()
   }
 
+  // Commit any changes the agents made in each worktree
+  for (let i = 0; i < n; i++) {
+    const wt = worktrees[i]
+    try {
+      // Stage all changes (new files, modifications, deletions)
+      execSync('git add -A', { cwd: wt.worktreePath, stdio: 'pipe' })
+      // Only commit if there are staged changes
+      const status = execSync('git status --porcelain', { cwd: wt.worktreePath, encoding: 'utf8' }).trim()
+      if (status) {
+        execSync(`git commit -m "cook race run ${i + 1}"`, { cwd: wt.worktreePath, stdio: 'pipe' })
+      }
+    } catch { /* no changes to commit, or git error — skip */ }
+  }
+
   // Build results
   const results: RunResult[] = settled.map((result, i) => ({
     index: i + 1,
