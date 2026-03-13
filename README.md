@@ -19,6 +19,11 @@ Issue the task once and __let it cook__:
 cook "Implement dark mode"
 ```
 
+Or race 3 parallel runs and let AI pick the best:
+
+```sh
+cook "Implement dark mode" x3 "pick least code, cleanest implementation"
+```
 
 `cook` runs Claude, Codex, or OpenCode in a work → review → gate loop, iterating automatically until the agent is satisfied or your max iterations are hit. Agents run natively by default, using their own OS-level sandboxes — no Docker required. Get even fancier by defining what to review and the criteria for done:
 
