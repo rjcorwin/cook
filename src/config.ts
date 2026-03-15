@@ -22,6 +22,12 @@ export interface CookConfig {
   steps: Record<StepName, StepAgentConfig>
 }
 
+export interface StepSelection {
+  agent: AgentName
+  model: string
+  sandbox: SandboxMode
+}
+
 export interface DockerConfig {
   network: {
     mode: 'restricted' | 'unrestricted'

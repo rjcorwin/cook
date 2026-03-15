@@ -10,15 +10,9 @@ import { RunnerPool, type SandboxMode } from './runner.js'
 import { NativeRunner } from './native-runner.js'
 import { BareRunner } from './bare-runner.js'
 import { loadCookMD } from './template.js'
-import { loadConfig, loadDockerConfig, type AgentName, type CookConfig, type StepName } from './config.js'
+import { loadConfig, loadDockerConfig, type AgentName, type CookConfig, type StepName, type StepSelection } from './config.js'
 import { logPhase, logStep, logOK, logWarn, logErr, BOLD, RESET } from './log.js'
 import { RaceApp } from './ui/RaceApp.js'
-
-interface StepSelection {
-  agent: AgentName
-  model: string
-  sandbox: SandboxMode
-}
 
 interface RaceRunConfig {
   workPrompt: string
@@ -32,7 +26,7 @@ interface RaceRunConfig {
   judgePrompt?: string
 }
 
-interface RunResult {
+export interface RunResult {
   index: number
   status: 'done' | 'error'
   logFile: string
@@ -43,15 +37,14 @@ interface RunResult {
 
 // --- Worktree management ---
 
-function sessionId(): string {
+export function sessionId(): string {
   const d = new Date()
   const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  const rand = Math.random().toString(36).slice(2, 6)
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${rand}`
 }
 
-function createWorktree(projectRoot: string, session: string, runIndex: number): { worktreePath: string; branchName: string } {
-  const worktreePath = path.join(projectRoot, '.cook', 'race', session, `run-${runIndex}`)
-  const branchName = `cook-race-${session}-${runIndex}`
+export function createWorktree(projectRoot: string, worktreePath: string, branchName: string): { worktreePath: string; branchName: string } {
   execSync(`git worktree add "${worktreePath}" -b "${branchName}" HEAD`, { cwd: projectRoot, stdio: 'pipe' })
 
   // Copy config files that may be gitignored
@@ -68,7 +61,7 @@ function createWorktree(projectRoot: string, session: string, runIndex: number):
   return { worktreePath, branchName }
 }
 
-function removeWorktree(projectRoot: string, worktreePath: string, branchName: string): void {
+export function removeWorktree(projectRoot: string, worktreePath: string, branchName: string): void {
   try {
     execSync(`git worktree remove "${worktreePath}" --force`, { cwd: projectRoot, stdio: 'pipe' })
   } catch { /* already removed */ }
@@ -79,7 +72,7 @@ function removeWorktree(projectRoot: string, worktreePath: string, branchName: s
 
 // --- Runner factory ---
 
-function createRunnerPool(worktreePath: string, config: CookConfig, runAgents: AgentName[]): RunnerPool {
+export function createRunnerPool(worktreePath: string, config: CookConfig, runAgents: AgentName[]): RunnerPool {
   return new RunnerPool(async (mode: SandboxMode) => {
     switch (mode) {
       case 'agent':
@@ -104,7 +97,7 @@ Consider: correctness, completeness, code quality, and whether the gate passed.
 
 Respond with PICK <N> on its own line (e.g. PICK 2), followed by a brief explanation of why this run is the best.`
 
-function buildJudgePrompt(results: RunResult[], customJudgePrompt?: string): string {
+export function buildJudgePrompt(results: RunResult[], customJudgePrompt?: string): string {
   const logs = results
     .filter(r => r.status === 'done')
     .map(r => {
@@ -120,7 +113,7 @@ function buildJudgePrompt(results: RunResult[], customJudgePrompt?: string): str
   return `${preamble}\n\n${logs}`
 }
 
-function parseJudgeVerdict(output: string, maxRun: number): number | null {
+export function parseJudgeVerdict(output: string, maxRun: number): number | null {
   for (const line of output.split('\n')) {
     const match = line.trim().match(/^PICK\s+(\d+)/i)
     if (match) {
@@ -133,7 +126,7 @@ function parseJudgeVerdict(output: string, maxRun: number): number | null {
 
 // --- User prompts ---
 
-function confirm(question: string): Promise<boolean> {
+export function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
     rl.question(question, answer => {
@@ -167,7 +160,9 @@ export async function runRace(
   // Create worktrees
   const worktrees: { worktreePath: string; branchName: string }[] = []
   for (let i = 1; i <= n; i++) {
-    const wt = createWorktree(projectRoot, session, i)
+    const wtPath = path.join(projectRoot, '.cook', 'race', session, `run-${i}`)
+    const branch = `cook-race-${session}-${i}`
+    const wt = createWorktree(projectRoot, wtPath, branch)
     worktrees.push(wt)
     logOK(`Worktree run-${i}: ${wt.branchName}`)
   }
@@ -233,7 +228,9 @@ export async function runRace(
       if (status) {
         execSync(`git commit -m "cook race run ${i + 1}"`, { cwd: wt.worktreePath, stdio: 'pipe' })
       }
-    } catch { /* no changes to commit, or git error — skip */ }
+    } catch (err) {
+      logWarn(`Run ${i + 1} commit failed: ${err instanceof Error ? err.message : err}`)
+    }
   }
 
   // Build results
@@ -330,12 +327,12 @@ async function applyAndCleanup(
       logStep(`  cd ${projectRoot} && git status`)
       return
     }
+    await cleanupAll(projectRoot, results, session)
   } else {
     logStep(`Skipped merge. Winner branch: ${winnerResult.branchName}`)
     logStep(`  To apply later: git merge ${winnerResult.branchName}`)
+    logStep('Race worktrees preserved.')
   }
-
-  await cleanupAll(projectRoot, results, session)
 }
 
 async function cleanupAll(

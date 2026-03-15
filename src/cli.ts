@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 import React from 'react'
 import { render } from 'ink'
-import { loadConfig, loadDockerConfig, type AgentName, type CookConfig, type StepName } from './config.js'
+import { loadConfig, loadDockerConfig, type AgentName, type CookConfig, type StepName, type StepSelection } from './config.js'
 import { RunnerPool, type SandboxMode } from './runner.js'
 import { NativeRunner } from './native-runner.js'
 import { BareRunner } from './bare-runner.js'
@@ -16,6 +16,7 @@ import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET } from './log.js
 import { agentLoop, loopEvents } from './loop.js'
 import { App } from './ui/App.js'
 import { runRace } from './race.js'
+import { runForkJoin, cleanupActiveForkJoins, type ForkJoinConfig, type ForkJoinBranch } from './fork-join.js'
 
 const DEFAULT_REVIEW_PROMPT = `Review the work done in the previous step.
 Check the session log for what changed.
@@ -41,6 +42,7 @@ const DEFAULT_COOK_CONFIG_JSON = `{
 
 const DEFAULT_COOK_GITIGNORE = `logs/
 race/
+fork/
 `
 
 const DEFAULT_COOK_DOCKERFILE = `FROM cook-sandbox
@@ -62,6 +64,7 @@ async function cleanup() {
     await pool.stopAll()
     pool = null
   }
+  await cleanupActiveForkJoins()
 }
 
 process.on('SIGINT', async () => {
@@ -93,6 +96,14 @@ ${BOLD}Usage:${RESET}
   cook "work" x3                  Race 3 parallel runs, judge the best
   cook "work" x3 "judge criteria" Race with custom judge instructions
   cook race 3 "work"              Race (explicit syntax)
+  cook "workA" "reviewA" "gateA" vs "workB" "reviewB" "gateB" judge "criteria"
+                                  Fork-join: compare two approaches
+  cook "workA" vs "workB" merge "criteria" 5
+                                  Fork-join with merge synthesis
+  cook "workA" vs "workB" summarize
+                                  Fork-join with comparison doc
+  cook "workA" vs "workB" judge "criteria" x3 "meta-criteria"
+                                  Fork-join with meta-parallelism
   cook init                       Set up COOK.md, config, and Dockerfile
   cook rebuild                    Rebuild the sandbox Docker image
   cook doctor                     Check Docker + auth readiness
@@ -287,12 +298,6 @@ function defaultModelForAgent(agent: AgentName): string {
     case 'codex': return 'gpt-5-codex'
     case 'opencode': return 'gpt-5'
   }
-}
-
-interface StepSelection {
-  agent: AgentName
-  model: string
-  sandbox: SandboxMode
 }
 
 const STEP_NAMES: StepName[] = ['work', 'review', 'gate']
@@ -681,6 +686,216 @@ function extractRaceMultiplier(args: string[]): { n: number; before: string[]; j
   return null
 }
 
+const JOIN_KEYWORDS = new Set(['judge', 'merge', 'summarize'])
+
+function parseForkJoinArgs(rawArgs: string[]): { forkJoin: ForkJoinConfig; remaining: string[] } {
+  // Separate flags from positional args
+  const VALUE_FLAGS = new Set([
+    '--work', '--review', '--gate', '--model', '--agent',
+    '--work-agent', '--review-agent', '--gate-agent',
+    '--work-model', '--review-model', '--gate-model',
+    '--max-iterations', '--sandbox',
+  ])
+  const BOOLEAN_FLAGS = new Set(['--hide-request'])
+
+  const flags: string[] = []
+  const positional: string[] = []
+
+  let i = 0
+  while (i < rawArgs.length) {
+    if (rawArgs[i].startsWith('--')) {
+      flags.push(rawArgs[i])
+      if (VALUE_FLAGS.has(rawArgs[i].includes('=') ? rawArgs[i].split('=')[0] : rawArgs[i])) {
+        if (!rawArgs[i].includes('=') && i + 1 < rawArgs.length) {
+          flags.push(rawArgs[i + 1])
+          i++
+        }
+      }
+    } else {
+      positional.push(rawArgs[i])
+    }
+    i++
+  }
+
+  // Parse positional args: triples separated by "vs", then join keyword, then xN
+  const branches: ForkJoinBranch[] = []
+  let currentTriple: string[] = []
+
+  let joinType: 'judge' | 'merge' | 'summarize' | null = null
+  let joinCriteria = ''
+  let joinMaxIterations = 3
+  let parallelCount: number | null = null
+  let parallelCriteria: string | null = null
+
+  let j = 0
+  while (j < positional.length) {
+    const token = positional[j]
+
+    if (token.toLowerCase() === 'vs') {
+      // Push current triple as a branch
+      if (currentTriple.length === 0) {
+        console.error('Error: empty branch before "vs"')
+        process.exit(1)
+      }
+      branches.push(tripleToBranch(currentTriple))
+      currentTriple = []
+      j++
+      continue
+    }
+
+    if (JOIN_KEYWORDS.has(token.toLowerCase())) {
+      // Push any remaining triple
+      if (currentTriple.length > 0) {
+        branches.push(tripleToBranch(currentTriple))
+        currentTriple = []
+      }
+      joinType = token.toLowerCase() as 'judge' | 'merge' | 'summarize'
+      j++
+
+      if (joinType === 'summarize') {
+        // No criteria for summarize
+      } else {
+        // Next positional is criteria (unless it's xN)
+        if (j < positional.length && !positional[j].match(/^x\d+$/i)) {
+          joinCriteria = positional[j]
+          j++
+        }
+        // For merge, check if next positional is a number (maxIterations)
+        if (joinType === 'merge' && j < positional.length && !positional[j].match(/^x\d+$/i)) {
+          const n = parseInt(positional[j], 10)
+          if (!isNaN(n) && n.toString() === positional[j]) {
+            joinMaxIterations = n
+            j++
+          }
+        }
+      }
+      continue
+    }
+
+    const xMatch = token.match(/^x(\d+)$/i)
+    if (xMatch) {
+      // Push any remaining triple
+      if (currentTriple.length > 0) {
+        branches.push(tripleToBranch(currentTriple))
+        currentTriple = []
+      }
+      parallelCount = parseInt(xMatch[1], 10)
+      j++
+      // Next positional is meta-judge criteria
+      if (j < positional.length) {
+        parallelCriteria = positional[j]
+        j++
+      }
+      continue
+    }
+
+    currentTriple.push(token)
+    j++
+  }
+
+  // Push any remaining triple
+  if (currentTriple.length > 0) {
+    branches.push(tripleToBranch(currentTriple))
+  }
+
+  // Validate
+  if (branches.length < 2) {
+    console.error('Error: fork-join requires at least 2 branches separated by "vs"')
+    process.exit(1)
+  }
+
+  for (let b = 0; b < branches.length; b++) {
+    if (!branches[b].work.trim()) {
+      console.error(`Error: branch ${b + 1} has an empty work prompt`)
+      process.exit(1)
+    }
+  }
+
+  if (!joinType) {
+    console.error('Error: fork-join requires a join strategy (judge, merge, or summarize)')
+    process.exit(1)
+  }
+
+  if (joinType === 'summarize' && parallelCount && parallelCount > 1) {
+    console.error('Error: summarize + x<N> is not supported (no single output to rank)')
+    process.exit(1)
+  }
+
+  let join: ForkJoinConfig['join']
+  switch (joinType) {
+    case 'judge':
+      join = { type: 'judge', criteria: joinCriteria }
+      break
+    case 'merge':
+      join = { type: 'merge', criteria: joinCriteria, maxIterations: joinMaxIterations }
+      break
+    case 'summarize':
+      join = { type: 'summarize' }
+      break
+  }
+
+  const parallel = parallelCount && parallelCount > 1
+    ? { count: parallelCount, criteria: parallelCriteria }
+    : null
+
+  return {
+    forkJoin: { branches, join, parallel },
+    remaining: flags,
+  }
+}
+
+function tripleToBranch(parts: string[]): ForkJoinBranch {
+  let maxIterations = 3
+  const prompts = [...parts]
+
+  // Check if last element is a number (maxIterations)
+  if (prompts.length > 1) {
+    const last = prompts[prompts.length - 1]
+    const n = parseInt(last, 10)
+    if (!isNaN(n) && n.toString() === last) {
+      maxIterations = n
+      prompts.pop()
+    }
+  }
+
+  return {
+    work: prompts[0] || '',
+    review: prompts[1] || DEFAULT_REVIEW_PROMPT,
+    gate: prompts[2] || DEFAULT_GATE_PROMPT,
+    maxIterations,
+  }
+}
+
+function hasForkJoinSyntax(rawArgs: string[]): boolean {
+  return rawArgs.some(arg => arg.toLowerCase() === 'vs')
+}
+
+async function cmdForkJoin(rawArgs: string[]): Promise<void> {
+  const projectRoot = findProjectRoot()
+
+  // Verify git repo
+  try {
+    execSync('git rev-parse --is-inside-work-tree', { cwd: projectRoot, stdio: 'pipe' })
+  } catch {
+    logErr('cook fork-join requires a git repository (for worktree isolation)')
+    process.exit(1)
+  }
+
+  const { forkJoin, remaining } = parseForkJoinArgs(rawArgs)
+  const parsed = parseArgs(remaining)
+
+  const config = loadConfig(projectRoot)
+  const { stepConfig, runAgents } = resolveAgentPlan(parsed, config)
+
+  await runForkJoin(projectRoot, {
+    forkJoin,
+    stepConfig,
+    config,
+    runAgents,
+    showRequest: parsed.showRequest,
+  })
+}
+
 const args = process.argv.slice(2)
 const command = args[0]
 
@@ -695,12 +910,17 @@ async function main() {
     case '-h':      usage(); break
     case undefined:  usage(); break
     default: {
-      // Check for xN multiplier syntax: cook "prompt" x3 "judge instructions"
-      const race = extractRaceMultiplier(args)
-      if (race) {
-        await cmdRaceFromMultiplier(race.n, race.before, race.judgePrompt)
+      // Check for fork-join syntax: cook "workA" vs "workB" judge "criteria"
+      if (hasForkJoinSyntax(args)) {
+        await cmdForkJoin(args)
       } else {
-        await runLoop(args)
+        // Check for xN multiplier syntax: cook "prompt" x3 "judge instructions"
+        const race = extractRaceMultiplier(args)
+        if (race) {
+          await cmdRaceFromMultiplier(race.n, race.before, race.judgePrompt)
+        } else {
+          await runLoop(args)
+        }
       }
       break
     }
