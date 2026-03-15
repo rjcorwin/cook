@@ -136,6 +136,17 @@ export function confirm(question: string): Promise<boolean> {
   })
 }
 
+export function pickOne(question: string, count: number): Promise<number | null> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
+  return new Promise(resolve => {
+    rl.question(question, answer => {
+      rl.close()
+      const n = parseInt(answer.trim(), 10)
+      resolve(!isNaN(n) && n >= 1 && n <= count ? n : null)
+    })
+  })
+}
+
 // --- Main race function ---
 
 export async function runRace(

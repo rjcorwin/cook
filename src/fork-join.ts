@@ -15,7 +15,7 @@ import {
   createRunnerPool,
   buildJudgePrompt,
   parseJudgeVerdict,
-  confirm,
+  pickOne,
   type RunResult,
 } from './race.js'
 import { RaceApp } from './ui/RaceApp.js'
@@ -625,71 +625,70 @@ async function handleInstanceResult(
     if (result.comparisonPath) {
       logOK(`Comparison: ${result.comparisonPath}`)
     }
-    const shouldClean = await confirm('  Remove fork-join worktrees? [Y/n] ')
-    if (shouldClean) {
-      await cleanupForkJoin(projectRoot, result, session)
+    const successfulBranches = result.branchResults.filter(r => r.status === 'done')
+    logStep('Branches:')
+    for (let i = 0; i < successfulBranches.length; i++) {
+      logStep(`  ${i + 1}. ${successfulBranches[i].branchName} — ${successfulBranches[i].worktreePath}`)
+    }
+    const picked = await pickOne(
+      `\n  Apply a branch? Enter number (1–${successfulBranches.length}) or blank to skip: `,
+      successfulBranches.length,
+    )
+    if (picked !== null) {
+      const chosen = successfulBranches[picked - 1]
+      try {
+        execSync(`git merge "${chosen.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
+        logOK(`Merged ${chosen.branchName} into current branch`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        logWarn(`Merge failed: ${msg}`)
+        logStep(`  cd ${projectRoot} && git status`)
+        return
+      }
+      for (const r of result.branchResults) {
+        removeWorktree(projectRoot, r.worktreePath, r.branchName)
+      }
+      const sessionDir = path.join(projectRoot, '.cook', 'fork', session)
+      try { fs.rmSync(sessionDir, { recursive: true }) } catch { /* ok */ }
+      logOK('Cleaned up fork-join worktrees and branches')
     } else {
-      logStep('Worktrees preserved.')
+      logStep('Skipped. Worktrees preserved for manual inspection:')
+      for (const r of successfulBranches) {
+        logStep(`  Branch ${r.index}: ${r.worktreePath}`)
+      }
     }
     return
   }
 
-  // Judge or merge — we have a winner or merge worktree to apply
+  // Judge or merge — apply winner and clean up automatically
   const winnerBranch = result.mergeWorktree ?? result.winner
   if (!winnerBranch) {
     logWarn('No winner produced.')
     return
   }
 
-  const shouldApply = await confirm(`\n  Apply ${winnerBranch.branchName} to current branch? [Y/n] `)
-  if (shouldApply) {
-    try {
-      execSync(`git merge "${winnerBranch.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
-      logOK(`Merged ${winnerBranch.branchName} into current branch`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logWarn(`Merge failed: ${msg}`)
-      logStep(`  cd ${projectRoot} && git status`)
-      return
-    }
-    await cleanupForkJoin(projectRoot, result, session)
-  } else {
-    logStep(`Skipped merge. Winner branch: ${winnerBranch.branchName}`)
-    logStep(`  To apply later: git merge ${winnerBranch.branchName}`)
-    logStep('Fork-join worktrees preserved.')
+  try {
+    execSync(`git merge "${winnerBranch.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
+    logOK(`Merged ${winnerBranch.branchName} into current branch`)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    logWarn(`Merge failed: ${msg}`)
+    logStep(`  cd ${projectRoot} && git status`)
+    return
   }
-}
 
-async function cleanupForkJoin(
-  projectRoot: string,
-  result: InstanceResult,
-  session: string,
-): Promise<void> {
-  const shouldClean = await confirm('  Remove fork-join worktrees and branches? [Y/n] ')
-  if (shouldClean) {
-    for (const r of result.branchResults) {
-      removeWorktree(projectRoot, r.worktreePath, r.branchName)
-    }
-    if (result.mergeWorktree) {
-      removeWorktree(projectRoot, result.mergeWorktree.worktreePath, result.mergeWorktree.branchName)
-    }
-    // Remove session directory
-    const sessionDir = path.join(projectRoot, '.cook', 'fork', session)
-    try { fs.rmSync(sessionDir, { recursive: true }) } catch { /* ok */ }
-    // Remove fork dir if empty
-    const forkDir = path.join(projectRoot, '.cook', 'fork')
-    try {
-      const remaining = fs.readdirSync(forkDir)
-      if (remaining.length === 0) fs.rmdirSync(forkDir)
-    } catch { /* ok */ }
-    logOK('Cleaned up fork-join worktrees and branches')
-  } else {
-    logStep('Fork-join worktrees preserved. To clean up later:')
-    for (const r of result.branchResults) {
-      logStep(`  git worktree remove ${r.worktreePath} --force && git branch -D ${r.branchName}`)
-    }
-    if (result.mergeWorktree) {
-      logStep(`  git worktree remove ${result.mergeWorktree.worktreePath} --force && git branch -D ${result.mergeWorktree.branchName}`)
-    }
+  for (const r of result.branchResults) {
+    removeWorktree(projectRoot, r.worktreePath, r.branchName)
   }
+  if (result.mergeWorktree) {
+    removeWorktree(projectRoot, result.mergeWorktree.worktreePath, result.mergeWorktree.branchName)
+  }
+  const sessionDir = path.join(projectRoot, '.cook', 'fork', session)
+  try { fs.rmSync(sessionDir, { recursive: true }) } catch { /* ok */ }
+  const forkDir = path.join(projectRoot, '.cook', 'fork')
+  try {
+    const remaining = fs.readdirSync(forkDir)
+    if (remaining.length === 0) fs.rmdirSync(forkDir)
+  } catch { /* ok */ }
+  logOK('Cleaned up fork-join worktrees and branches')
 }

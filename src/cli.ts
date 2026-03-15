@@ -722,7 +722,7 @@ function parseForkJoinArgs(rawArgs: string[]): { forkJoin: ForkJoinConfig; remai
   let currentTriple: string[] = []
 
   let joinType: 'judge' | 'merge' | 'summarize' | null = null
-  let joinCriteria = ''
+  let joinCriteria = 'Combine the best elements from each branch into a coherent implementation.'
   let joinMaxIterations = 3
   let parallelCount: number | null = null
   let parallelCriteria: string | null = null
@@ -812,8 +812,7 @@ function parseForkJoinArgs(rawArgs: string[]): { forkJoin: ForkJoinConfig; remai
   }
 
   if (!joinType) {
-    console.error('Error: fork-join requires a join strategy (judge, merge, or summarize)')
-    process.exit(1)
+    joinType = 'merge'
   }
 
   if (joinType === 'summarize' && parallelCount && parallelCount > 1) {
