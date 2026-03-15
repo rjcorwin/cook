@@ -32,18 +32,20 @@ Additionally, the `race` keyword syntax should be formalized to replace the `xN`
 
 | File | Role | Changes needed |
 |------|------|----------------|
-| `src/cli.ts` | Arg parsing, command dispatch | New keyword parser, `--iterate`/`--next`/`-i`/`-n` flags, ralph dispatch |
+| `src/cli.ts` | Arg parsing, command dispatch | New keyword parser replacing `extractRaceMultiplier()`, `--iterate`/`--next`/`-i`/`-n` flags, ralph dispatch |
 | `src/loop.ts` | Core work→review→gate loop | Gate verdict gains NEXT, iterate prompt support, iteration reset on NEXT |
-| `src/race.ts` | Race mode (worktree-based parallelism) | Accept ralph-wrapped configs, compose with ralph |
-| `src/config.ts` | Config types and loading | New fields: `iterate`, `next`, `maxNexts` in config |
+| `src/race.ts` | Race mode (worktree-based parallelism) | Accept inner execution function for ralph composition (currently takes flat `RaceRunConfig`) |
+| `src/fork-join.ts` | Fork-join mode (added by b4x-fork-join) | No changes needed — separate dispatch path via `vs` keyword |
+| `src/config.ts` | Config types and loading | New fields: `iterate`, `next`, `maxNexts` in config. `StepSelection` already moved here by b4x-fork-join. |
 | `src/template.ts` | COOK.md template rendering | New context variables for iterate/next state |
 | `src/ui/App.tsx` | TUI status bar | Display ralph step count, iterate vs next state |
+| `src/ui/RaceApp.tsx` | Multi-run TUI (used by race and fork-join) | Already has `title`, `runLabel`, `runLabels` props from b4x-fork-join |
 
 ### Data Flow
 
-Current: `cli.ts` parses args → builds `LoopConfig` → calls `agentLoop()` which runs work→review→gate in a for loop.
+Current: `cli.ts` parses args → dispatch order is: (1) `hasForkJoinSyntax()` check routes `vs`-containing args to `cmdForkJoin()`, (2) `extractRaceMultiplier()` routes `xN`-containing args to `cmdRaceFromMultiplier()`, (3) else `runLoop()`.
 
-Proposed: `cli.ts` parses args into segments (base prompts, then keyword segments) → if ralph keyword present, wraps `agentLoop` in an outer ralph loop → if race keyword present, wraps in race parallelism → keywords compose right-to-left.
+Proposed: `cli.ts` parses args into segments (base prompts, then keyword segments) → if ralph keyword present, wraps `agentLoop` in an outer ralph loop → if race keyword present, wraps in race parallelism → keywords compose right-to-left. Fork-join (`vs`) dispatch is unchanged and still takes priority.
 
 ### Constraints
 
@@ -54,4 +56,6 @@ Proposed: `cli.ts` parses args into segments (base prompts, then keyword segment
 ## Prior Art
 
 - Current `extractRaceMultiplier()` in cli.ts scans for `xN` pattern and splits args into before/after segments. The keyword parser generalizes this approach.
+- `parseForkJoinArgs()` in cli.ts (added by b4x-fork-join) is a good model for how to write a similar left-to-right positional parser with duck-typed params.
 - The loop in `agentLoop()` is a simple for loop with DONE/ITERATE verdict parsing. Adding NEXT is a third verdict that triggers outer-loop advancement.
+- `createWorktree`, `removeWorktree`, `createRunnerPool`, `sessionId`, `RunResult` are already exported from `race.ts` (made public by b4x-fork-join) — use these directly rather than duplicating.

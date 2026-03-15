@@ -1,6 +1,6 @@
 # Plan: Iterate Prompt, Next Prompt, and Ralph Loop
 
-**Status:** Draft
+**Status:** Draft — updated after b4x-fork-join merge
 **Author:** rjcorwin + Claude
 **Created:** 2026-03-15
 
@@ -58,7 +58,7 @@ Right-to-left nesting: rightmost keyword = outermost wrapper. The parser peels k
 
 ### Keyword segment parsing
 
-Replace `extractRaceMultiplier()` with a general keyword segment parser:
+Replace `extractRaceMultiplier()` with a general keyword segment parser. Note: `parseForkJoinArgs()` (added by b4x-fork-join) is a good reference for this style of left-to-right positional parsing. The new parser only runs when `hasForkJoinSyntax()` returns false (i.e., no `vs` in args), since fork-join dispatch happens first in `main()`.
 
 ```ts
 interface KeywordSegment {
@@ -290,13 +290,13 @@ Both modes use the same prompts and limits. The difference is just where the out
 
 ### Step 3: Update CLI parser (`src/cli.ts`)
 
-1. Add keyword segment parser (replaces `extractRaceMultiplier`)
+1. Add keyword segment parser (replaces `extractRaceMultiplier`). The new parser only runs in the `default` case of `main()`, after the existing `hasForkJoinSyntax()` fork-join check — no change to fork-join dispatch needed.
 2. Add `--iterate`/`-i`, `--next`/`-n`, `--max-nexts` flags to `parseArgs()`
 3. Update `ParsedArgs` interface
 4. Keep `xN` as an alias (detected before keyword parsing)
 5. Update default gate prompt when next is enabled
 6. Add `DEFAULT_ITERATE_PROMPT` and `DEFAULT_NEXT_PROMPT`
-7. Update usage text and banner
+7. Update usage text and banner. Note: `cook race N` as a top-level subcommand (`case 'race'` in main) remains unchanged. The `race` keyword in positional args (e.g. `cook "w" race 3 ralph "n"`) is handled by the new keyword segment parser in the `default` case.
 
 ### Step 4: Add ralph execution (`src/ralph.ts` or extend `src/loop.ts`)
 
@@ -307,16 +307,19 @@ Both modes use the same prompts and limits. The difference is just where the out
 
 1. Refactor `runRace()` to accept an inner execution function (not just agentLoop)
 2. This allows `race(ralph(base))` and `ralph(race(base))` compositions
+3. Note: `createWorktree`, `removeWorktree`, `createRunnerPool`, `sessionId`, `RunResult` are already exported from `race.ts` (done by b4x-fork-join) — no need to re-export these.
 
 ### Step 6: Update config (`src/config.ts`)
 
 1. Add `iterate`, `iteratePrompt`, `next`, `nextPrompt`, `maxNexts` to config schema
 2. Update `loadConfig()` to parse new fields
+3. Note: `StepSelection` was already moved to `config.ts` by b4x-fork-join — no change needed there.
 
-### Step 7: Update TUI (`src/ui/App.tsx`)
+### Step 7: Update TUI (`src/ui/App.tsx` and `src/ui/RaceApp.tsx`)
 
-1. Show ralph step count in status bar when active
+1. Show ralph step count in status bar when active (in `App.tsx` for single-loop; in `RaceApp.tsx` for race/ralph compositions)
 2. Distinguish iterate vs next vs initial work in step display
+3. Note: `RaceApp.tsx` already has `title`, `runLabel`, and `runLabels` props from b4x-fork-join — ralph can reuse these to label steps (e.g. "Task 1", "Task 2") when composing with race.
 
 ### Order of operations
 
