@@ -117,6 +117,8 @@ async function runForkJoinInstance(
       maxIterations: Math.max(...branches.map(b => b.maxIterations)),
       emitters,
       animation: runConfig.config.animation,
+      title: `cook fork-join \u2014 ${branches.length} branches`,
+      runLabel: 'Branch',
     }),
     { exitOnCtrlC: false }
   )
@@ -362,6 +364,8 @@ Combine the strongest elements from each branch into a single coherent implement
       maxIterations,
       emitters: [mergeEmitter],
       animation: runConfig.config.animation,
+      title: 'cook fork-join \u2014 merge',
+      runLabel: 'Merge',
     }),
     { exitOnCtrlC: false }
   )
