@@ -1,0 +1,10 @@
+{
+  "agent": "claude",
+  "sandbox": "docker",
+  "steps": {
+    "work": {},
+    "review": {},
+    "gate": {}
+  },
+  "env": []
+}
