@@ -21,11 +21,11 @@ const DEFAULT_REVIEW_PROMPT = `Review the work done in the previous step.
 Check the session log for what changed.
 Identify issues categorized as High, Medium, or Low severity.`
 
-const DEFAULT_GATE_PROMPT = `Based on the review, respond with exactly DONE or ITERATE
-on its own line, followed by a brief reason.
+const DEFAULT_GATE_PROMPT = `Based on the review, respond with exactly DONE, ITERATE, or NEXT followed by a brief reason.
 
 DONE if: the work is complete and no High severity issues remain.
-ITERATE if: there are High severity issues or the work is incomplete.`
+ITERATE if: there are High severity issues that need to be fixed in the work just done.
+NEXT if: the current step is good but there is a next step or phase to continue with.`
 
 const DEFAULT_COOK_CONFIG_JSON = `{
   "agent": "claude",
