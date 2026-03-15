@@ -19,6 +19,9 @@ interface RaceAppProps {
   maxIterations: number
   emitters: EventEmitter[]
   animation: AnimationStyle
+  title?: string
+  runLabel?: string
+  runLabels?: string[]
 }
 
 function formatElapsed(secs: number): string {
@@ -43,7 +46,7 @@ const STATUS_COLORS: Record<string, string> = {
   error: 'red',
 }
 
-export function RaceApp({ runCount, maxIterations, emitters, animation }: RaceAppProps) {
+export function RaceApp({ runCount, maxIterations, emitters, animation, title, runLabel = 'Run', runLabels }: RaceAppProps) {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const barWidth = Math.min(20, Math.floor((stdout?.columns ?? 80) / 4))
@@ -110,7 +113,7 @@ export function RaceApp({ runCount, maxIterations, emitters, animation }: RaceAp
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text bold color="#ff8c00">{`cook race \u2014 ${runCount} runs`}</Text>
+        <Text bold color="#ff8c00">{title ?? `cook race \u2014 ${runCount} runs`}</Text>
       </Box>
 
       {runs.map(run => {
@@ -123,13 +126,13 @@ export function RaceApp({ runCount, maxIterations, emitters, animation }: RaceAp
           ? progressBar(run.iteration, run.maxIterations, run.step, barWidth)
           : '\u2591'.repeat(barWidth)
 
-        const stepLabel = run.step
-          ? `${run.step} ${run.iteration}/${run.maxIterations}`
-          : ''
+        const stepLabel = run.status === 'done' || run.status === 'error' || !run.step
+          ? ''
+          : `${run.step} ${run.iteration}/${run.maxIterations}`
 
         return (
           <Box key={run.id} gap={1}>
-            <Text bold>{`Run ${run.id}`}</Text>
+            <Text bold>{runLabels ? runLabels[run.id - 1] : `${runLabel} ${run.id}`}</Text>
             <Text color={run.status === 'done' ? 'green' : run.status === 'error' ? 'red' : '#ff8c00'}>{bar}</Text>
             <Text>{stepLabel.padEnd(14)}</Text>
             <Text color="gray">{formatElapsed(elapsed).padStart(6)}</Text>
