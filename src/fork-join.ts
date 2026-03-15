@@ -76,6 +76,7 @@ interface InstanceResult {
   instanceIndex: number
   winner?: BranchResult
   mergeWorktree?: { worktreePath: string; branchName: string }
+  mergeLogFile?: string
   comparisonPath?: string
   branchResults: BranchResult[]
 }
@@ -88,44 +89,56 @@ async function runForkJoinInstance(
   projectRoot: string,
   session: string,
   instanceIndex: number,
+  options?: { externalEmitters?: EventEmitter[]; skipTui?: boolean; preCreatedWorktrees?: { worktreePath: string; branchName: string }[]; preCreatedMergeWorktree?: { worktreePath: string; branchName: string } },
 ): Promise<InstanceResult> {
   const { branches, join } = forkJoinConfig
 
   // Record base commit so we can diff against it after branches commit
   const baseCommit = execSync('git rev-parse HEAD', { cwd: projectRoot, encoding: 'utf8' }).trim()
 
-  // Create worktrees for each branch
-  const worktrees: { worktreePath: string; branchName: string }[] = []
-  for (let j = 1; j <= branches.length; j++) {
-    const wtPath = path.join(projectRoot, '.cook', 'fork', session, `inst-${instanceIndex}-branch-${j}`)
-    const branch = `cook-fork-${session}-${instanceIndex}-${j}`
-    const wt = createWorktree(projectRoot, wtPath, branch)
-    worktrees.push(wt)
-    logOK(`Worktree inst-${instanceIndex}-branch-${j}: ${wt.branchName}`)
+  // Use pre-created worktrees if provided (avoids concurrent git worktree add race)
+  let worktrees: { worktreePath: string; branchName: string }[]
+  if (options?.preCreatedWorktrees) {
+    worktrees = options.preCreatedWorktrees
+  } else {
+    worktrees = []
+    for (let j = 1; j <= branches.length; j++) {
+      const wtPath = path.join(projectRoot, '.cook', 'fork', session, `inst-${instanceIndex}-branch-${j}`)
+      const branch = `cook-fork-${session}-${instanceIndex}-${j}`
+      const wt = createWorktree(projectRoot, wtPath, branch)
+      worktrees.push(wt)
+      logOK(`Worktree inst-${instanceIndex}-branch-${j}: ${wt.branchName}`)
+    }
   }
 
   // Create per-branch emitters and runner pools
-  const emitters = worktrees.map(() => new EventEmitter())
+  const emitters = options?.externalEmitters ?? worktrees.map(() => new EventEmitter())
   const pools = worktrees.map(wt =>
     createRunnerPool(wt.worktreePath, runConfig.config, runConfig.runAgents)
   )
 
-  // Render TUI (branches are the "runs")
-  const { unmount, waitUntilExit } = render(
-    React.createElement(RaceApp, {
-      runCount: branches.length,
-      maxIterations: Math.max(...branches.map(b => b.maxIterations)),
-      emitters,
-      animation: runConfig.config.animation,
-      title: `cook fork-join \u2014 ${branches.length} branches`,
-      runLabel: 'Branch',
-    }),
-    { exitOnCtrlC: false }
-  )
+  // Render TUI (branches are the "runs") — skip if caller handles TUI
+  let unmount: (() => void) | null = null
+  let waitUntilExit: (() => Promise<void>) | null = null
+  if (!options?.skipTui) {
+    const ink = render(
+      React.createElement(RaceApp, {
+        runCount: branches.length,
+        maxIterations: Math.max(...branches.map(b => b.maxIterations)),
+        emitters,
+        animation: runConfig.config.animation,
+        title: `cook fork-join \u2014 ${branches.length} branches`,
+        runLabel: 'Branch',
+      }),
+      { exitOnCtrlC: false }
+    )
+    unmount = ink.unmount
+    waitUntilExit = ink.waitUntilExit
+  }
 
   // Register cleanup so SIGINT can tear down this instance
   const unregister = registerCleanup(async () => {
-    unmount()
+    if (unmount) unmount()
     for (const pool of pools) {
       await pool.stopAll()
     }
@@ -155,8 +168,10 @@ async function runForkJoinInstance(
   const settled = await Promise.allSettled(promises)
 
   // Clean up TUI
-  unmount()
-  try { await waitUntilExit() } catch { /* ink may throw on unmount */ }
+  if (unmount) {
+    unmount()
+    try { if (waitUntilExit) await waitUntilExit() } catch { /* ink may throw on unmount */ }
+  }
 
   // Stop all runners
   for (const pool of pools) {
@@ -212,7 +227,7 @@ async function runForkJoinInstance(
     case 'judge':
       return judgeInstance(branchResults, join.criteria, projectRoot, runConfig, session, instanceIndex)
     case 'merge':
-      return mergeInstance(branchResults, join.criteria, join.maxIterations, projectRoot, runConfig, session, instanceIndex, baseCommit)
+      return mergeInstance(branchResults, join.criteria, join.maxIterations, projectRoot, runConfig, session, instanceIndex, baseCommit, options?.skipTui, options?.preCreatedMergeWorktree)
     case 'summarize':
       return summarizeInstance(branchResults, projectRoot, runConfig, session, instanceIndex, baseCommit)
   }
@@ -294,6 +309,8 @@ async function mergeInstance(
   session: string,
   instanceIndex: number,
   baseCommit: string,
+  skipTui?: boolean,
+  preCreatedMergeWorktree?: { worktreePath: string; branchName: string },
 ): Promise<InstanceResult> {
   const successfulBranches = branchResults.filter(r => r.status === 'done')
 
@@ -310,10 +327,15 @@ async function mergeInstance(
   logPhase('Merging branches')
   logStep('Creating merge worktree and synthesizing...')
 
-  // Create merge worktree
-  const mergeWtPath = path.join(projectRoot, '.cook', 'fork', session, `inst-${instanceIndex}-merge`)
-  const mergeBranch = `cook-fork-${session}-${instanceIndex}-merge`
-  const mergeWt = createWorktree(projectRoot, mergeWtPath, mergeBranch)
+  // Use pre-created merge worktree if provided (avoids concurrent git worktree add race)
+  let mergeWt: { worktreePath: string; branchName: string }
+  if (preCreatedMergeWorktree) {
+    mergeWt = preCreatedMergeWorktree
+  } else {
+    const mergeWtPath = path.join(projectRoot, '.cook', 'fork', session, `inst-${instanceIndex}-merge`)
+    const mergeBranch = `cook-fork-${session}-${instanceIndex}-merge`
+    mergeWt = createWorktree(projectRoot, mergeWtPath, mergeBranch)
+  }
   logOK(`Merge worktree: ${mergeWt.branchName}`)
 
   // Collect diffs and logs from each branch (diff against base commit)
@@ -355,20 +377,28 @@ Combine the strongest elements from each branch into a single coherent implement
 
   // Run agentLoop in merge worktree with TUI for progress feedback
   const mergeEmitter = new EventEmitter()
+  let mergeLogFile = ''
+  mergeEmitter.on('logFile', (logFile: string) => { mergeLogFile = logFile })
   const mergePool = createRunnerPool(mergeWt.worktreePath, runConfig.config, runConfig.runAgents)
   const cookMD = loadCookMD(projectRoot)
 
-  const { unmount: unmountMerge, waitUntilExit: waitMergeExit } = render(
-    React.createElement(RaceApp, {
-      runCount: 1,
-      maxIterations,
-      emitters: [mergeEmitter],
-      animation: runConfig.config.animation,
-      title: 'cook fork-join \u2014 merge',
-      runLabel: 'Merge',
-    }),
-    { exitOnCtrlC: false }
-  )
+  let unmountMerge: (() => void) | null = null
+  let waitMergeExit: (() => Promise<void>) | null = null
+  if (!skipTui) {
+    const ink = render(
+      React.createElement(RaceApp, {
+        runCount: 1,
+        maxIterations,
+        emitters: [mergeEmitter],
+        animation: runConfig.config.animation,
+        title: 'cook fork-join \u2014 merge',
+        runLabel: 'Merge',
+      }),
+      { exitOnCtrlC: false }
+    )
+    unmountMerge = ink.unmount
+    waitMergeExit = ink.waitUntilExit
+  }
 
   const mergeLoopConfig: LoopConfig = {
     workPrompt: mergeWorkPrompt,
@@ -385,8 +415,10 @@ Combine the strongest elements from each branch into a single coherent implement
     logErr(`Merge loop failed: ${err}`)
   }
 
-  unmountMerge()
-  try { await waitMergeExit() } catch { /* ink may throw on unmount */ }
+  if (unmountMerge) {
+    unmountMerge()
+    try { if (waitMergeExit) await waitMergeExit() } catch { /* ink may throw on unmount */ }
+  }
   await mergePool.stopAll()
 
   // Remove MERGE_CONTEXT.md so it doesn't get committed into the project
@@ -408,6 +440,7 @@ Combine the strongest elements from each branch into a single coherent implement
   return {
     instanceIndex,
     mergeWorktree: mergeWt,
+    mergeLogFile,
     branchResults,
   }
 }
@@ -521,23 +554,104 @@ export async function runForkJoin(
     const result = await runForkJoinInstance(forkJoin, runConfig, projectRoot, session, 1)
     await handleInstanceResult(result, projectRoot, session, forkJoin)
   } else {
-    // Meta-parallelism: run N fork-join instances sequentially
-    // (each instance renders its own TUI, so they can't overlap)
-    logPhase(`Running ${instanceCount} fork-join instances`)
+    // Meta-parallelism: run N fork-join instances in parallel
+    logPhase(`Running ${instanceCount} fork-join instances in parallel`)
+
+    // Create all worktrees sequentially to avoid git index.lock race
+    const branchCount = forkJoin.branches.length
+    const allWorktrees: { worktreePath: string; branchName: string }[][] = []
+    for (let i = 0; i < instanceCount; i++) {
+      const instanceWorktrees: { worktreePath: string; branchName: string }[] = []
+      for (let j = 1; j <= branchCount; j++) {
+        const wtPath = path.join(projectRoot, '.cook', 'fork', session, `inst-${i + 1}-branch-${j}`)
+        const branch = `cook-fork-${session}-${i + 1}-${j}`
+        const wt = createWorktree(projectRoot, wtPath, branch)
+        instanceWorktrees.push(wt)
+        logOK(`Worktree inst-${i + 1}-branch-${j}: ${wt.branchName}`)
+      }
+      allWorktrees.push(instanceWorktrees)
+    }
+
+    // Pre-create merge worktrees for merge join type (avoids concurrent git worktree add race)
+    let preCreatedMergeWorktrees: ({ worktreePath: string; branchName: string } | undefined)[] | undefined
+    if (forkJoin.join.type === 'merge') {
+      preCreatedMergeWorktrees = []
+      for (let i = 0; i < instanceCount; i++) {
+        const mergeWtPath = path.join(projectRoot, '.cook', 'fork', session, `inst-${i + 1}-merge`)
+        const mergeBranch = `cook-fork-${session}-${i + 1}-merge`
+        const mergeWt = createWorktree(projectRoot, mergeWtPath, mergeBranch)
+        preCreatedMergeWorktrees.push(mergeWt)
+        logOK(`Worktree inst-${i + 1}-merge: ${mergeWt.branchName}`)
+      }
+    }
+
+    // Create emitters for all instances' branches
+    const allEmitters: EventEmitter[][] = []
+    for (let i = 0; i < instanceCount; i++) {
+      allEmitters.push(Array.from({ length: branchCount }, () => new EventEmitter()))
+    }
+    const flatEmitters = allEmitters.flat()
+
+    // Build labels: "1.1", "1.2", "2.1", "2.2", etc.
+    const runLabels: string[] = []
+    for (let i = 0; i < instanceCount; i++) {
+      for (let j = 0; j < branchCount; j++) {
+        runLabels.push(`${i + 1}.${j + 1}`)
+      }
+    }
+
+    // Render combined TUI for all instances' branches
+    const { unmount: unmountCombined, waitUntilExit: waitCombinedExit } = render(
+      React.createElement(RaceApp, {
+        runCount: flatEmitters.length,
+        maxIterations: Math.max(...forkJoin.branches.map(b => b.maxIterations)),
+        emitters: flatEmitters,
+        animation: runConfig.config.animation,
+        title: `cook fork-join \u2014 ${instanceCount} instances \u00d7 ${branchCount} branches`,
+        runLabels,
+      }),
+      { exitOnCtrlC: false }
+    )
+
+    // Run all instances in parallel (worktrees already created above)
+    const settled = await Promise.allSettled(
+      allEmitters.map((emitters, i) =>
+        runForkJoinInstance(forkJoin, runConfig, projectRoot, session, i + 1, {
+          externalEmitters: emitters,
+          skipTui: true,
+          preCreatedWorktrees: allWorktrees[i],
+          preCreatedMergeWorktree: preCreatedMergeWorktrees?.[i],
+        })
+      )
+    )
+
+    // Clean up combined TUI
+    unmountCombined()
+    try { await waitCombinedExit() } catch { /* ink may throw on unmount */ }
 
     const instanceResults: InstanceResult[] = []
-    for (let i = 0; i < instanceCount; i++) {
-      logStep(`Starting instance ${i + 1} of ${instanceCount}`)
-      try {
-        const result = await runForkJoinInstance(forkJoin, runConfig, projectRoot, session, i + 1)
-        instanceResults.push(result)
-      } catch (err) {
-        logErr(`Instance ${i + 1} failed: ${err}`)
+    for (const result of settled) {
+      if (result.status === 'fulfilled') {
+        instanceResults.push(result.value)
+      } else {
+        logErr(`Instance failed: ${result.reason}`)
       }
     }
 
     if (instanceResults.length === 0) {
       logErr('All instances failed.')
+      return
+    }
+
+    // For summarize joins, display all comparison files — no meta-judging needed
+    if (forkJoin.join.type === 'summarize') {
+      logPhase('Summary results from all instances')
+      for (const r of instanceResults) {
+        if (r.comparisonPath) {
+          logOK(`Instance ${r.instanceIndex} comparison: ${r.comparisonPath}`)
+        }
+        await handleInstanceResult(r, projectRoot, session, forkJoin)
+      }
       return
     }
 
@@ -567,13 +681,13 @@ export async function runForkJoin(
       return {
         index: i + 1,
         status: 'done' as const,
-        logFile: w.winner?.logFile ?? '',
+        logFile: w.mergeLogFile || w.winner?.logFile || '',
         worktreePath: source.worktreePath,
         branchName: source.branchName,
       }
     })
 
-    const metaCriteria = forkJoin.parallel!.criteria ?? (forkJoin.join.type !== 'summarize' ? (forkJoin.join as { criteria: string }).criteria : '')
+    const metaCriteria = forkJoin.parallel!.criteria ?? (forkJoin.join as { criteria: string }).criteria
     const metaJudgePrompt = buildJudgePrompt(metaResults, metaCriteria)
     const gateStep = runConfig.stepConfig.gate
     const metaPool = createRunnerPool(projectRoot, runConfig.config, runConfig.runAgents)

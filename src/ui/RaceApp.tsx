@@ -21,6 +21,7 @@ interface RaceAppProps {
   animation: AnimationStyle
   title?: string
   runLabel?: string
+  runLabels?: string[]
 }
 
 function formatElapsed(secs: number): string {
@@ -45,7 +46,7 @@ const STATUS_COLORS: Record<string, string> = {
   error: 'red',
 }
 
-export function RaceApp({ runCount, maxIterations, emitters, animation, title, runLabel = 'Run' }: RaceAppProps) {
+export function RaceApp({ runCount, maxIterations, emitters, animation, title, runLabel = 'Run', runLabels }: RaceAppProps) {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const barWidth = Math.min(20, Math.floor((stdout?.columns ?? 80) / 4))
@@ -131,7 +132,7 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
 
         return (
           <Box key={run.id} gap={1}>
-            <Text bold>{`${runLabel} ${run.id}`}</Text>
+            <Text bold>{runLabels ? runLabels[run.id - 1] : `${runLabel} ${run.id}`}</Text>
             <Text color={run.status === 'done' ? 'green' : run.status === 'error' ? 'red' : '#ff8c00'}>{bar}</Text>
             <Text>{stepLabel.padEnd(14)}</Text>
             <Text color="gray">{formatElapsed(elapsed).padStart(6)}</Text>
