@@ -625,9 +625,10 @@ export async function runForkJoin(
       )
     )
 
-    // Clean up combined TUI
+    // Clean up combined TUI — unmount immediately and don't await waitUntilExit
+    // because ink's waitUntilExit only resolves when useApp().exit() is called
+    // from within the component, not from external unmount()
     unmountCombined()
-    try { await waitCombinedExit() } catch { /* ink may throw on unmount */ }
 
     const instanceResults: InstanceResult[] = []
     for (const result of settled) {
