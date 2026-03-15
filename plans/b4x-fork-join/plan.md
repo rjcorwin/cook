@@ -6,7 +6,7 @@
 
 ## Summary
 
-Extend cook's CLI with a fork-join pattern: multiple branches defined by different work/review/gate triples are separated by `vs`, run in parallel in isolated git worktrees, and then combined via one of three join strategies — `judge` (pick a winner), `merge` (synthesize the best parts via its own cook loop), or `summarize` (produce a comparison doc for human review). An optional `x<N>` suffix wraps the entire pipeline in N meta-parallel instances with a final meta-judge. All new behavior is additive; existing single-loop and race (`x<N>` without `vs`) syntax is unchanged.
+Extend cook's CLI with a fork-join pattern: multiple branches defined by different work/review/gate triples are separated by `vs`, run in parallel in isolated git worktrees, and then combined via one of three join strategies — `judge` (pick a winner), `merge` (synthesize the best parts via its own cook loop), or `summarize` (produce a comparison doc for human review). The existing `x<N>` token means "run N parallel instances of this pipeline" in race mode, and means the same thing in fork-join mode — the pipeline is just a fork-join instance instead of a single loop. No semantic change; just a new pipeline type for it to multiply. All new behavior is additive; existing single-loop and race (`x<N>` without `vs`) syntax is unchanged.
 
 ## Motivation
 
@@ -14,7 +14,7 @@ Cook's race mode already runs N identical loops in parallel to find the best imp
 
 ## Goals
 
-- Parse the new `vs` / `judge` / `merge` / `summarize` / `x<N>` grammar from CLI args
+- Parse the new `vs` / `judge` / `merge` / `summarize` grammar from CLI args; route the existing `x<N>` token to fork-join meta-parallelism when `vs` is present
 - Run branches in parallel in separate git worktrees, each with its own cook loop
 - Implement all three join strategies (judge, merge, summarize)
 - Support `x<N>` meta-parallelism wrapping the entire fork-join pipeline
@@ -38,7 +38,7 @@ cook <work> <review> <gate> [max-iterations]
      [x<N> [criteria]]
 ```
 
-`vs` requires a join keyword. `summarize` + `x<N>` is an error. `x<N>` without criteria inherits from `judge`/`merge`. `x<N>` with criteria overrides the join criteria for the meta-judge.
+`vs` requires a join keyword. `x<N>` already means "run N parallel instances of this pipeline" — in fork-join mode the pipeline is a fork-join instance rather than a single loop, but the token is unchanged. `summarize` + `x<N>` is an error (no single output to rank). `x<N>` without criteria inherits from `judge`/`merge`. `x<N>` with criteria overrides the join criteria for the meta-judge.
 
 ### Structured config
 
@@ -90,10 +90,10 @@ When `parallel.count > 1`, run `parallel.count` full fork-join instances in para
 - Scan args left-to-right collecting triples (work, review, gate, optional number)
 - On `vs`: push current triple to `branches[]`, start collecting next triple
 - On `judge`/`merge`/`summarize`: record join strategy and remaining args (criteria string, optional number for `merge`)
-- On `x<N>`: extract count and optional trailing criteria string
+- On `x<N>`: reuse `extractRaceMultiplier()` (already exists in `cli.ts`) to pull out the count and optional trailing criteria string
 - Validate: `vs` without join → error; `summarize` + `x<N>` → error; fewer than 2 branches when `vs` present → error
 - Return `ForkJoinConfig`
-- Detect fork-join in `main()`: if args contain `vs`, call `parseForkJoinArgs()` instead of `parseArgs()`, then call `runForkJoin()` instead of `runLoop()` or `runRace()`
+- Detect fork-join in `main()`: if args contain `vs`, call `parseForkJoinArgs()` instead of `parseArgs()`, then call `runForkJoin()` instead of `runLoop()` or `runRace()`. Without `vs`, `x<N>` continues to route to the existing `runRace()` path unchanged.
 
 ### Step 2: `runForkJoinInstance()` in a new `src/fork-join.ts`
 

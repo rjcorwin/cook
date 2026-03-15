@@ -15,7 +15,7 @@ Cook currently supports a single-path loop (work → review → gate → iterate
 
 ### Open Questions
 
-- How do `x<N>` in the existing race grammar and `x<N>` in the new fork-join grammar coexist? They are semantically different tokens (race: N identical runs of one prompt; fork-join: N instances of an entire multi-branch pipeline). The parser must distinguish them.
+- How does `x<N>` route correctly between race and fork-join? The token semantics are actually the same in both modes ("run N parallel instances of this pipeline") — what changes is what the pipeline is. `vs` presence is the fork-join trigger; without `vs`, `x<N>` routes to the existing race path unchanged. `extractRaceMultiplier()` in `cli.ts` can be reused for extraction in both cases.
 - When one branch in a fork-join fails (agent error, gate never passing), does the join proceed with remaining branches? If zero branches succeed, what's the error behavior?
 - Where does the `merge` agent run? It needs to read diffs from multiple worktrees but write new code somewhere. Does it get its own fresh worktree, or does it work in a temporary directory?
 - What does `x<N>` without a prior `judge` or `merge` (i.e., `x<N>` applied to `summarize`) mean? The spec says it's an error — confirm this is the right call versus silently ignoring.
