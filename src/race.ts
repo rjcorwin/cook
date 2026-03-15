@@ -325,7 +325,8 @@ async function applyAndCleanup(
       execSync(`git merge "${winnerResult.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
       logOK(`Merged ${winnerResult.branchName} into current branch`)
     } catch (err) {
-      logWarn(`Merge has conflicts. Resolve them and commit:`)
+      const msg = err instanceof Error ? err.message : String(err)
+      logWarn(`Merge failed: ${msg}`)
       logStep(`  cd ${projectRoot} && git status`)
       return
     }

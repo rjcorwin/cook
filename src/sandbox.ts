@@ -166,26 +166,26 @@ async function copyAuthFiles(container: Docker.Container, userSpec: string): Pro
   await containerExec(container, 'root', ['chown', '-R', userSpec, '/home/cook'])
 }
 
-function hasClaudeContainerCredentials(config: CookConfig): boolean {
+function hasClaudeContainerCredentials(env: string[]): boolean {
   const home = os.homedir()
   if (fs.existsSync(path.join(home, '.claude', '.credentials.json'))) return true
-  if (process.env.CLAUDE_CODE_OAUTH_TOKEN && config.env.includes('CLAUDE_CODE_OAUTH_TOKEN')) return true
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN && env.includes('CLAUDE_CODE_OAUTH_TOKEN')) return true
   return false
 }
 
-function hasCodexContainerCredentials(config: CookConfig): boolean {
+function hasCodexContainerCredentials(env: string[]): boolean {
   const home = os.homedir()
   if (fs.existsSync(path.join(home, '.codex', 'auth.json'))) return true
-  if (process.env.OPENAI_API_KEY && config.env.includes('OPENAI_API_KEY')) return true
+  if (process.env.OPENAI_API_KEY && env.includes('OPENAI_API_KEY')) return true
   return false
 }
 
-function hasOpencodeContainerCredentials(config: CookConfig): boolean {
+function hasOpencodeContainerCredentials(env: string[]): boolean {
   const home = os.homedir()
   if (fs.existsSync(path.join(home, '.local', 'share', 'opencode', 'auth.json'))) return true
   if (fs.existsSync(path.join(home, '.config', 'opencode', 'opencode.json'))) return true
   for (const name of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) {
-    if (process.env[name] && config.env.includes(name)) return true
+    if (process.env[name] && env.includes(name)) return true
   }
   return false
 }
@@ -354,13 +354,13 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
 
   await cleanupStaleContainers(docker, projectRoot)
   await ensureBaseImage(docker)
-  if (agents.includes('claude') && !hasClaudeContainerCredentials(config)) {
+  if (agents.includes('claude') && !hasClaudeContainerCredentials(env)) {
     logWarn('Claude selected but ~/.claude/.credentials.json is missing on host. OAuth/keychain-only logins usually do not transfer to Linux containers; run `claude setup-token` on host.')
   }
-  if (agents.includes('codex') && !hasCodexContainerCredentials(config)) {
+  if (agents.includes('codex') && !hasCodexContainerCredentials(env)) {
     logWarn('Codex selected but no container-usable credentials found. Add ~/.codex/auth.json or set OPENAI_API_KEY and include it in .cook.config.json env passthrough.')
   }
-  if (agents.includes('opencode') && !hasOpencodeContainerCredentials(config)) {
+  if (agents.includes('opencode') && !hasOpencodeContainerCredentials(env)) {
     logWarn('OpenCode selected but no container-usable credentials found. Add ~/.local/share/opencode/auth.json or set OPENAI_API_KEY/ANTHROPIC_API_KEY and include it in .cook.config.json env passthrough.')
   }
 
@@ -392,7 +392,8 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
     if (val !== undefined) containerEnv.push(`${varName}=${val}`)
   }
 
-  const containerName = `cook-${process.pid}`
+  const projectHash = createHash('sha256').update(projectRoot).digest('hex').slice(0, 12)
+  const containerName = `cook-${projectHash}`
   const container = await docker.createContainer({
     name: containerName,
     Image: imageName,
