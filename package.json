@@ -1,6 +1,6 @@
 {
   "name": "@let-it-cook/cli",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "type": "module",
   "bin": {
     "cook": "dist/cli.js"

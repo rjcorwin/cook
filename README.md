@@ -25,6 +25,12 @@ Run parallel cook loops, AI picks the best:
 cook "Implement dark mode" x3 "pick least code, cleanest implementation"
 ```
 
+Compare two approaches, merge the best of both:
+
+```sh
+cook "Implement dark mode with CSS variables" vs "Implement dark mode with Tailwind" merge "cleanest implementation"
+```
+
 Define the review and done criteria:
 
 ```sh
@@ -120,6 +126,61 @@ cook race 3 "Add dark mode"
 ```
 
 Each run gets its own git worktree branched from HEAD. After all runs complete, a judge agent reads every session log side-by-side and responds with `PICK N`. The winning branch is merged into your current branch, and the worktrees are cleaned up.
+
+## Fork-join mode
+
+Fork-join runs two or more different approaches in parallel, then combines the results. Use `vs` to separate branches:
+
+```sh
+cook "Implement auth with JWT" vs "Implement auth with sessions" merge "best security and simplicity"
+```
+
+Each branch gets its own git worktree and runs the full work→review→gate loop independently. After all branches complete, a join strategy combines the results.
+
+### Join strategies
+
+**merge** (default) — Synthesizes the best parts of all branches into a new implementation. A merge agent reads the diffs and logs from every branch, then produces a combined result in its own worktree. The merge runs its own work→review→gate loop.
+
+```sh
+cook "Approach A" vs "Approach B" merge "combine the strongest elements" 5
+```
+
+The trailing number sets max iterations for the merge loop (default: 3).
+
+**judge** — Picks a single winner. A judge agent reads all branch logs and diffs, then responds with `PICK N`. The winning branch is merged into your current branch.
+
+```sh
+cook "Approach A" vs "Approach B" judge "fewest lines changed, cleanest diff"
+```
+
+**summarize** — Produces a comparison document without picking a winner or merging. The branches are preserved for manual inspection.
+
+```sh
+cook "Approach A" vs "Approach B" summarize
+```
+
+The comparison is written to `.cook/fork/comparison-<session>.md`.
+
+### Per-branch prompts
+
+Each branch can have its own work, review, and gate prompts (as a triple), and its own max iterations:
+
+```sh
+cook "Build with React" "Check accessibility" "DONE if WCAG AA" 3 \
+  vs \
+  "Build with Vue" "Check bundle size" "DONE if under 50kb" 5 \
+  judge "best developer experience"
+```
+
+### Meta-parallelism
+
+Add `xN` after the join strategy to run N independent fork-join instances in parallel. A meta-judge then picks the best instance:
+
+```sh
+cook "Approach A" vs "Approach B" judge "cleanest code" x3 "most thorough result"
+```
+
+This runs 3 complete fork-join instances (each with 2 branches), then a meta-judge compares the 3 winners and picks the best. The first quoted string after `xN` is the meta-judge criteria.
 
 ## How it works
 
@@ -263,6 +324,10 @@ cook "prompt" 5                 Run with 5 max iterations
 cook "prompt" x3                Race 3 parallel runs, judge the best
 cook "prompt" x3 "criteria"    Race with custom judge instructions
 cook race 3 "prompt"            Race (explicit syntax)
+cook "A" vs "B" merge "criteria"          Fork-join with merge synthesis
+cook "A" vs "B" judge "criteria"          Fork-join with judge pick
+cook "A" vs "B" summarize                 Fork-join with comparison doc
+cook "A" vs "B" judge "c" x3 "meta-c"    Fork-join with meta-parallelism
 cook init                       Set up COOK.md, config, and Dockerfile
 cook rebuild                    Rebuild the sandbox Docker image
 cook doctor                     Check agent CLI, Docker, + auth readiness
