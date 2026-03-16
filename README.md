@@ -1,169 +1,121 @@
-# cook
+# Let it cook. 
 
-Do you often find yourself in this loop with claude, codex, or opencode?
+Reviewing your coding agent's first pass is often a waste of your time. Cook puts your preferred agent in a "cook loop" (work->review->gate->iterate) and doesn't let it finish until until actually done.
 
 ```
-You:   Hey Agent, implement dark mode.
-Agent: Done! I added the thing.
-
-You:   Hey Agent, review your work.
-Agent: Found a few issues.
-
-You:   Hey Agent, fix your work.
-Agent: Fixed! 
+npm install -g @let-it-cook/cli
+cook "Implement dark mode" \ # work prompt
+     "Code review the implementation" # review prompt
+     "If no major issues say DONE, else say ITERATE" # gate prompt
+     "Fix the issues identified in the review" # iterate prompt
 ```
 
-__Let it cook__, reviewing and iterating until actually done:
+By default, cook uses your local Claude Code instance for all the work, but you can also use codex or opencode.
 
-```sh
-cook "Implement dark mode"
+```
+cook "Implement dark mode" --agent opencode --agent-model z-ai/glm-4.7
+cook "Implement dark mode" --agent codex
 ```
 
-Run parallel cook loops, AI picks the best:
+Run parallel cook loops in separate work trees, AI picks the best:
 
 ```sh
 cook "Implement dark mode" x3 "pick least code, cleanest implementation"
 ```
 
-Compare two approaches, merge the best of both:
+Explore multiple directions in separate work trees with `vs`:
 
 ```sh
-cook "Implement dark mode with CSS variables" vs "Implement dark mode with Tailwind" merge "cleanest implementation"
+cook "Implement dark mode with CSS" vs "Implement dark mode with Tailwind"
 ```
 
-Define the review and done criteria:
+Embed cook loops in ralph loops to work through a task list:
 
 ```sh
-cook \
-  "Implement dark mode" # work prompt \
-  "Review the implementation. Categorize findings by High/Medium/Low." # review prompt \
-  "Reply DONE if no High findings remain; otherwise ITERATE." # gate prompt \
-  5 # max iterations
+cook "Work on the next task in plan.md" ralph
 ```
 
-Ralph loop through a 3 step plan.
+Everything is composable:
 
 ```sh
-# Ralph loop for a 3 step plan with an embedded cook loop.
-for step in {1..3}; do cook "Implement step $step in plan.md"; done
+# Race 3 copies of a ralph loop — best overall plan execution wins
+cook "Implement the next step in plan.md" ralph x3 "most complete"
 ```
 
-## Prerequisites
-
-- [Node.js](https://nodejs.org/) 20+
-- An agent CLI on your PATH: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode)
-- [Docker](https://docs.docker.com/get-docker/) (only needed for `--sandbox docker`)
-
-## Install
+or race each task in the ralph loop, then race the whole ralph loop:
 
 ```sh
-npm install -g @let-it-cook/cli
+cook "Implement the next step in plan.md" x3 "most complete" ralph x3 "cleanest implementation wins"
 ```
 
-## Quick start
+Override the default prompts and set your own defaults:
 
 ```sh
-cd your-project
-cook init                      # creates COOK.md + .cook/ config directory
-cook doctor                    # checks Docker + auth readiness
-cook "Add dark mode"           # runs the agent loop
-cook "Fix the login bug" 5     # runs with up to 5 iterations
+cook init   # creates COOK.md + .cook/config.json
 ```
 
-## Examples
+Edit `COOK.md` to customize the meta-prompt template, and `.cook/config.json` to set default agent, model, sandbox, and per-step overrides. See [Configuration](#configuration) for details.
 
-Basic run:
+## Cook loop
+
+The core loop runs work → review → gate → iterate until the gate says DONE or max iterations are reached (default: 3).
 
 ```sh
-cook "Create a space cat themed todo app in a single index.html"
+cook "Add dark mode"                    # all defaults
+cook "Add dark mode" 5                  # up to 5 iterations
 ```
 
-Race 3 parallel runs and let a judge pick the best:
+Override individual step prompts positionally or with flags:
 
 ```sh
-cook "Refactor the checkout flow to reduce steps" x3 "fewest lines changed, cleanest diff"
+# Positional: work, review, gate, iterate
+cook "Add dark mode" "Review for accessibility" "DONE if WCAG AA, else ITERATE" "Fix the a11y issues"
+
+# Flags (mix and match with positional)
+cook "Add dark mode" --review "Review for accessibility" --iterate "Fix the a11y issues" 5
 ```
 
-Per-step agent/model overrides (for one run):
+Use different agents or models per step:
 
 ```sh
-cook "Implement auth flow" \
-  --agent opencode --model gpt-5 \
+cook "Add dark mode" \
   --work-agent codex --work-model gpt-5-codex \
   --review-agent claude --review-model opus
 ```
 
-Doctor checks using the same override logic:
+## Vs mode
+
+Run different approaches in parallel git worktrees, then combine the results. Each branch gets its own full cook loop.
 
 ```sh
-cook doctor --work-agent codex --review-agent claude
+cook "Implement dark mode with CSS variables" vs "Implement dark mode with Tailwind"
 ```
-
-## Race mode
-
-Race N parallel runs of the same task in isolated git worktrees, then let a judge agent pick the best result and merge it:
-
-```sh
-cook "Add dark mode" x3
-```
-
-Add custom judging criteria after the multiplier:
-
-```sh
-cook "Add dark mode" x3 "least code wins"
-```
-
-All the usual flags work alongside `x3`:
-
-```sh
-cook "Add dark mode" x3 "least code wins" --agent codex --max-iterations 5
-```
-
-There's also an explicit syntax:
-
-```sh
-cook race 3 "Add dark mode"
-```
-
-Each run gets its own git worktree branched from HEAD. After all runs complete, a judge agent reads every session log side-by-side and responds with `PICK N`. The winning branch is merged into your current branch, and the worktrees are cleaned up.
-
-## Fork-join mode
-
-Fork-join runs two or more different approaches in parallel, then combines the results. Use `vs` to separate branches:
-
-```sh
-cook "Implement auth with JWT" vs "Implement auth with sessions" merge "best security and simplicity"
-```
-
-Each branch gets its own git worktree and runs the full work→review→gate loop independently. After all branches complete, a join strategy combines the results.
 
 ### Join strategies
 
-**merge** (default) — Synthesizes the best parts of all branches into a new implementation. A merge agent reads the diffs and logs from every branch, then produces a combined result in its own worktree. The merge runs its own work→review→gate loop.
+After all branches complete, a join strategy combines the results. Specify it after the last `vs` branch:
+
+**merge** (default) — Synthesizes the best parts of all branches into a new implementation. The merge agent reads diffs and logs from every branch, then produces a combined result with its own cook loop.
 
 ```sh
 cook "Approach A" vs "Approach B" merge "combine the strongest elements" 5
 ```
 
-The trailing number sets max iterations for the merge loop (default: 3).
-
-**judge** — Picks a single winner. A judge agent reads all branch logs and diffs, then responds with `PICK N`. The winning branch is merged into your current branch.
+**judge** — Picks a single winner (like race, but with distinct prompts per branch).
 
 ```sh
-cook "Approach A" vs "Approach B" judge "fewest lines changed, cleanest diff"
+cook "Approach A" vs "Approach B" judge "fewest lines changed"
 ```
 
-**summarize** — Produces a comparison document without picking a winner or merging. The branches are preserved for manual inspection.
+**summarize** — Produces a comparison document without picking or merging. Branches are preserved for manual inspection.
 
 ```sh
 cook "Approach A" vs "Approach B" summarize
 ```
 
-The comparison is written to `.cook/fork/comparison-<session>.md`.
+### Per-branch overrides
 
-### Per-branch prompts
-
-Each branch can have its own work, review, and gate prompts (as a triple), and its own max iterations:
+Each branch can have its own review, gate, and iteration limit:
 
 ```sh
 cook "Build with React" "Check accessibility" "DONE if WCAG AA" 3 \
@@ -172,25 +124,52 @@ cook "Build with React" "Check accessibility" "DONE if WCAG AA" 3 \
   judge "best developer experience"
 ```
 
-### Meta-parallelism
+## Race mode
 
-Add `xN` after the join strategy to run N independent fork-join instances in parallel. A meta-judge then picks the best instance:
+Race N identical runs in parallel git worktrees, then let a judge pick the best:
 
 ```sh
-cook "Approach A" vs "Approach B" judge "cleanest code" x3 "most thorough result"
+cook "Add dark mode" race 3
+cook "Add dark mode" race 3 "least code wins"      # custom judge criteria
+cook "Add dark mode" x3 "least code wins"           # shorthand (same thing)
 ```
 
-This runs 3 complete fork-join instances (each with 2 branches), then a meta-judge compares the 3 winners and picks the best. The first quoted string after `xN` is the meta-judge criteria.
+All the usual flags work alongside race:
 
-## How it works
+```sh
+cook "Add dark mode" race 3 "cleanest diff" --agent codex --max-iterations 5
+```
 
-1. **Work** — The selected agent executes your prompt in your project directory.
-2. **Review** — A second pass reviews what changed and flags issues by severity.
-3. **Gate** — A third pass decides DONE or ITERATE based on the review.
+Each run gets its own worktree branched from HEAD. After all runs complete, a judge agent reads every session log and responds with `PICK N`. The winning branch is merged into your current branch.
 
-The loop repeats until the gate says DONE or max iterations are reached (default: 3).
+## Ralph loop
 
-A persistent status bar at the bottom of the terminal shows the current step, iteration, model, and elapsed time.
+Ralph puts the cook loop inside an outer loop that advances through a task list. When the gate says NEXT (current task is done, more to do), the iteration counter resets and work continues with the ralph prompt. When the gate says DONE (all tasks complete), the loop exits.
+
+```sh
+cook "Work on the next task in plan.md" ralph
+cook "Work on the next task in plan.md" ralph 5                     # up to 5 task transitions
+cook "Build the auth module" ralph "Continue to the next task" 5    # custom ralph prompt
+```
+
+On the first pass, the original work prompt is used. On subsequent NEXT transitions, the ralph prompt takes over (default: "The previous task passed review. Continue to the next task.").
+
+The gate now has three possible verdicts:
+- **DONE** — all tasks complete, exit
+- **ITERATE** — fix issues, counts against `--max-iterations`
+- **NEXT** — task is good, advance to next, resets iteration counter, counts against ralph limit
+
+### Composing ralph with race
+
+Keywords compose right-to-left — the rightmost keyword is the outermost wrapper:
+
+```sh
+# Ralph through tasks, race each task 3 ways
+cook "Next task in plan.md" race 3 "cleanest" ralph 5
+
+# Race 3 complete ralph runs against each other
+cook "Next task in plan.md" ralph 5 race 3 "most complete"
+```
 
 ## Sandbox modes
 
@@ -316,34 +295,3 @@ Edit the `## Project Instructions` section to give the agent context about your 
 
 Backticks and bare `$` in your `COOK.md` are escaped automatically so they don't break the template. To emit a literal `${...}` in the rendered output, write `\${...}` in `COOK.md`.
 
-## Options
-
-```
-cook "prompt"                   Run the work/review/gate loop
-cook "prompt" 5                 Run with 5 max iterations
-cook "prompt" x3                Race 3 parallel runs, judge the best
-cook "prompt" x3 "criteria"    Race with custom judge instructions
-cook race 3 "prompt"            Race (explicit syntax)
-cook "A" vs "B" merge "criteria"          Fork-join with merge synthesis
-cook "A" vs "B" judge "criteria"          Fork-join with judge pick
-cook "A" vs "B" summarize                 Fork-join with comparison doc
-cook "A" vs "B" judge "c" x3 "meta-c"    Fork-join with meta-parallelism
-cook init                       Set up COOK.md, config, and Dockerfile
-cook rebuild                    Rebuild the sandbox Docker image
-cook doctor                     Check agent CLI, Docker, + auth readiness
-
---work PROMPT                   Override work step prompt
---review PROMPT                 Override review step prompt
---gate PROMPT                   Override gate step prompt
---max-iterations N              Max review iterations (default: 3)
---agent AGENT                   Default agent (claude|codex|opencode)
---model MODEL                   Default model (for default agent)
---sandbox MODE                  Sandbox mode (agent|docker|none, default: agent)
---work-agent AGENT              Work step agent override
---review-agent AGENT            Review step agent override
---gate-agent AGENT              Gate step agent override
---work-model MODEL              Work step model override
---review-model MODEL            Review step model override
---gate-model MODEL              Gate step model override
---hide-request                  Hide the templated request for each step
-```
