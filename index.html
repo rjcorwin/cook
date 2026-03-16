@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cook — Let it cook.</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #f0883e;
+      --accent-dim: #f0883e22;
+      --code-bg: #1c2128;
+      --link: #58a6ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 3rem;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero h1 .dot {
+      color: var(--accent);
+    }
+
+    .hero .tagline {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto 1.5rem;
+    }
+
+    .install-bar {
+      display: inline-block;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1.4rem;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.95rem;
+      color: var(--accent);
+      cursor: pointer;
+      position: relative;
+    }
+
+    .install-bar::before {
+      content: "$ ";
+      color: var(--text-muted);
+    }
+
+    h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 1.8rem 0 0.6rem;
+    }
+
+    p {
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin-bottom: 1.2rem;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      color: var(--text);
+    }
+
+    p code, li code, td code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      font-size: 0.88em;
+    }
+
+    .comment { color: var(--text-muted); }
+
+    ul, ol {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+
+    li {
+      margin-bottom: 0.3rem;
+    }
+
+    strong {
+      color: var(--text);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.2rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--border);
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+    }
+
+    td {
+      background: var(--code-bg);
+    }
+
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.6rem 1rem;
+      margin-bottom: 1rem;
+      background: var(--accent-dim);
+      border-radius: 0 6px 6px 0;
+      color: var(--text-muted);
+    }
+
+    blockquote p {
+      margin-bottom: 0;
+      color: var(--text-muted);
+    }
+
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem;
+    }
+
+    .feature-card h4 {
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+      color: var(--accent);
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    .pipe {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+
+    .pipe-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .pipe-arrow {
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 3rem 0 1rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="hero">
+      <h1>Let it cook<span class="dot">.</span></h1>
+      <p class="tagline">
+        Reviewing your coding agent's first pass is often a waste of your time. Cook puts your preferred agent in a "cook loop" and doesn't let it finish until it's actually done.
+      </p>
+      <div class="install-bar" title="Click to copy" onclick="navigator.clipboard.writeText('npm install -g @let-it-cook/cli')">npm install -g @let-it-cook/cli</div>
+      <p style="margin-top: 1rem; font-size: 0.9rem;">
+        <a href="https://github.com/rjcorwin/cook">GitHub</a> &middot;
+        <a href="https://www.npmjs.com/package/@let-it-cook/cli">npm</a>
+      </p>
+    </header>
+
+    <section class="section">
+      <pre><code>cook "Implement dark mode" \                          <span class="comment"># work prompt</span>
+     "Code review the implementation" \               <span class="comment"># review prompt</span>
+     "If no major issues say DONE, else say ITERATE" \ <span class="comment"># gate prompt</span>
+     "Fix the issues identified in the review"         <span class="comment"># iterate prompt</span></code></pre>
+
+      <p>By default, cook uses your local Claude Code instance for all the work, but you can also use codex or opencode.</p>
+
+      <pre><code>cook "Implement dark mode" --agent opencode --agent-model z-ai/glm-4.7
+cook "Implement dark mode" --agent codex</code></pre>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>Race</h4>
+          <p>Run parallel cook loops in separate work trees, AI picks the best.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Vs</h4>
+          <p>Explore multiple directions in separate work trees with different prompts.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Ralph</h4>
+          <p>Embed cook loops in ralph loops to work through a task list.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Composable</h4>
+          <p>Race, vs, and ralph compose freely for maximum flexibility.</p>
+        </div>
+      </div>
+
+      <pre><code><span class="comment"># Race 3 copies</span>
+cook "Implement dark mode" x3 "pick least code, cleanest implementation"
+
+<span class="comment"># Explore directions</span>
+cook "Implement dark mode with CSS" vs "Implement dark mode with Tailwind"
+
+<span class="comment"># Ralph through a task list</span>
+cook "Work on the next task in plan.md" ralph
+
+<span class="comment"># Race 3 copies of a ralph loop — best overall plan execution wins</span>
+cook "Implement the next step in plan.md" ralph x3 "most complete"
+
+<span class="comment"># Race each task in the ralph loop, then race the whole ralph loop</span>
+cook "Implement the next step in plan.md" x3 "most complete" ralph x3 "cleanest implementation wins"</code></pre>
+    </section>
+
+    <h2>Cook Loop</h2>
+    <section class="section">
+      <p>The core loop runs <strong>work &rarr; review &rarr; gate &rarr; iterate</strong> until the gate says DONE or max iterations are reached (default: 3).</p>
+
+      <div class="pipe">
+        <span class="pipe-step">work</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-step">review</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-step">gate</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-step">iterate</span>
+        <span class="pipe-arrow">&circlearrowleft;</span>
+      </div>
+
+      <pre><code>cook "Add dark mode"                    <span class="comment"># all defaults</span>
+cook "Add dark mode" 5                  <span class="comment"># up to 5 iterations</span></code></pre>
+
+      <p>Override individual step prompts positionally or with flags:</p>
+
+      <pre><code><span class="comment"># Positional: work, review, gate, iterate</span>
+cook "Add dark mode" "Review for accessibility" "DONE if WCAG AA, else ITERATE" "Fix the a11y issues"
+
+<span class="comment"># Flags (mix and match with positional)</span>
+cook "Add dark mode" --review "Review for accessibility" --iterate "Fix the a11y issues" 5</code></pre>
+
+      <p>Use different agents or models per step:</p>
+
+      <pre><code>cook "Add dark mode" \
+  --work-agent codex --work-model gpt-5-codex \
+  --review-agent claude --review-model opus</code></pre>
+    </section>
+
+    <h2>Vs Mode</h2>
+    <section class="section">
+      <p>Run different approaches in parallel git worktrees, then combine the results. Each branch gets its own full cook loop.</p>
+
+      <pre><code>cook "Implement dark mode with CSS variables" vs "Implement dark mode with Tailwind"</code></pre>
+
+      <h3>Join Strategies</h3>
+      <p>After all branches complete, a join strategy combines the results:</p>
+
+      <p><strong>merge</strong> (default) &mdash; Synthesizes the best parts of all branches into a new implementation.</p>
+      <pre><code>cook "Approach A" vs "Approach B" merge "combine the strongest elements" 5</code></pre>
+
+      <p><strong>judge</strong> &mdash; Picks a single winner.</p>
+      <pre><code>cook "Approach A" vs "Approach B" judge "fewest lines changed"</code></pre>
+
+      <p><strong>summarize</strong> &mdash; Produces a comparison document without picking or merging.</p>
+      <pre><code>cook "Approach A" vs "Approach B" summarize</code></pre>
+
+      <h3>Per-branch Overrides</h3>
+      <p>Each branch can have its own review, gate, and iteration limit:</p>
+      <pre><code>cook "Build with React" "Check accessibility" "DONE if WCAG AA" 3 \
+  vs \
+  "Build with Vue" "Check bundle size" "DONE if under 50kb" 5 \
+  judge "best developer experience"</code></pre>
+    </section>
+
+    <h2>Race Mode</h2>
+    <section class="section">
+      <p>Race N identical runs in parallel git worktrees, then let a judge pick the best:</p>
+
+      <pre><code>cook "Add dark mode" race 3
+cook "Add dark mode" race 3 "least code wins"      <span class="comment"># custom judge criteria</span>
+cook "Add dark mode" x3 "least code wins"           <span class="comment"># shorthand</span></code></pre>
+
+      <p>All the usual flags work alongside race:</p>
+      <pre><code>cook "Add dark mode" race 3 "cleanest diff" --agent codex --max-iterations 5</code></pre>
+
+      <p>Each run gets its own worktree branched from HEAD. After all runs complete, a judge agent reads every session log and responds with <code>PICK N</code>. The winning branch is merged into your current branch.</p>
+    </section>
+
+    <h2>Ralph Loop</h2>
+    <section class="section">
+      <p>Ralph puts the cook loop inside an outer loop that advances through a task list. When the gate says <strong>NEXT</strong>, the iteration counter resets and work continues. When it says <strong>DONE</strong>, the loop exits.</p>
+
+      <pre><code>cook "Work on the next task in plan.md" ralph
+cook "Work on the next task in plan.md" ralph 5                     <span class="comment"># up to 5 task transitions</span>
+cook "Build the auth module" ralph "Continue to the next task" 5    <span class="comment"># custom ralph prompt</span></code></pre>
+
+      <p>The gate has three possible verdicts:</p>
+      <ul>
+        <li><strong>DONE</strong> &mdash; all tasks complete, exit</li>
+        <li><strong>ITERATE</strong> &mdash; fix issues, counts against <code>--max-iterations</code></li>
+        <li><strong>NEXT</strong> &mdash; task is good, advance to next, resets iteration counter</li>
+      </ul>
+
+      <h3>Composing Ralph with Race</h3>
+      <p>Keywords compose right-to-left &mdash; the rightmost keyword is the outermost wrapper:</p>
+      <pre><code><span class="comment"># Ralph through tasks, race each task 3 ways</span>
+cook "Next task in plan.md" race 3 "cleanest" ralph 5
+
+<span class="comment"># Race 3 complete ralph runs against each other</span>
+cook "Next task in plan.md" ralph 5 race 3 "most complete"</code></pre>
+    </section>
+
+    <h2>Sandbox Modes</h2>
+    <section class="section">
+      <p>Cook supports three sandbox modes via <code>--sandbox</code>:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Flag</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Agent</strong> (default)</td>
+            <td><code>--sandbox agent</code></td>
+            <td>Agents use their own OS-level sandboxes. No Docker required.</td>
+          </tr>
+          <tr>
+            <td><strong>Docker</strong></td>
+            <td><code>--sandbox docker</code></td>
+            <td>Runs agents inside a Docker container with network restrictions. Full isolation.</td>
+          </tr>
+          <tr>
+            <td><strong>None</strong></td>
+            <td><code>--sandbox none</code></td>
+            <td>All safety bypassed. Use with caution.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <blockquote>
+        <p><strong>Note:</strong> OpenCode is only supported in Docker mode &mdash; it has no OS-level sandbox.</p>
+      </blockquote>
+    </section>
+
+    <h2>Configuration</h2>
+    <section class="section">
+      <p>Run <code>cook init</code> in your project root to scaffold the configuration files:</p>
+
+      <pre><code>cook init</code></pre>
+
+      <p>This creates:</p>
+      <ul>
+        <li><code>COOK.md</code> &mdash; Project instructions and agent loop template</li>
+        <li><code>.cook/config.json</code> &mdash; Default agent/model/sandbox, per-step overrides</li>
+        <li><code>.cook/docker.json</code> &mdash; Docker-only config: network mode and allowed hosts</li>
+        <li><code>.cook/Dockerfile</code> &mdash; Project-specific dependencies (Docker mode only)</li>
+        <li><code>.cook/logs/</code> &mdash; Session logs (gitignored)</li>
+      </ul>
+
+      <p>Example <code>.cook/config.json</code>:</p>
+      <pre><code>{
+  "agent": "claude",
+  "sandbox": "agent",
+  "steps": {
+    "work": {
+      "agent": "codex",
+      "model": "gpt-5-codex"
+    },
+    "review": {
+      "agent": "claude",
+      "model": "opus"
+    },
+    "gate": {
+      "sandbox": "docker"
+    }
+  },
+  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
+}</code></pre>
+
+      <p>The <code>env</code> array controls which environment variables from your host are forwarded to the agent process. Auth tokens like <code>CLAUDE_CODE_OAUTH_TOKEN</code> and <code>OPENAI_API_KEY</code> need to be listed here for agents to authenticate.</p>
+
+      <p>CLI defaults (<code>--agent</code>, <code>--model</code>, <code>--sandbox</code>) override config defaults for a single run. Step flags (<code>--work-agent</code>, <code>--review-agent</code>, etc.) override both.</p>
+
+      <h3>Docker Mode Details</h3>
+      <p>When using <code>--sandbox docker</code>, the agent runs inside a Docker container. Network access is restricted by default using <code>iptables</code>. Only outbound HTTPS to the agent's API endpoint is allowed.</p>
+
+      <p>To allow additional hosts, create <code>.cook/docker.json</code>:</p>
+      <pre><code>{
+  "network": {
+    "mode": "restricted",
+    "allowedHosts": ["registry.npmjs.org", "api.github.com"]
+  }
+}</code></pre>
+
+      <p>To disable network restrictions entirely (not recommended):</p>
+      <pre><code>{
+  "network": {
+    "mode": "unrestricted"
+  }
+}</code></pre>
+    </section>
+
+    <h2>COOK.md</h2>
+    <section class="section">
+      <p><code>COOK.md</code> lives in your project root and does two things: it holds project-level instructions for the agent, and it defines the template used to construct the prompt sent to the agent at each step.</p>
+
+      <p>When <code>cook</code> runs, it renders <code>COOK.md</code> as a JavaScript template literal, injecting these variables:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>${step}</code></td>
+            <td>Current step name: <code>work</code>, <code>review</code>, or <code>gate</code></td>
+          </tr>
+          <tr>
+            <td><code>${prompt}</code></td>
+            <td>The prompt for this step</td>
+          </tr>
+          <tr>
+            <td><code>${lastMessage}</code></td>
+            <td>Output from the previous step</td>
+          </tr>
+          <tr>
+            <td><code>${iteration}</code></td>
+            <td>Current iteration number</td>
+          </tr>
+          <tr>
+            <td><code>${maxIterations}</code></td>
+            <td>Max iterations configured</td>
+          </tr>
+          <tr>
+            <td><code>${logFile}</code></td>
+            <td>Path to the session log file</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Edit the <code>## Project Instructions</code> section to give the agent context about your project. The <code>## Agent Loop</code> section controls the prompt structure.</p>
+    </section>
+
+    <footer>
+      <p>Let it cook.</p>
+    </footer>
+
+  </div>
+</body>
+</html>
