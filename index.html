@@ -182,7 +182,7 @@
 
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 1rem;
       margin: 1.5rem 0;
     }
@@ -243,7 +243,7 @@
   <div class="container">
 
     <header class="hero">
-      <h1>Let it cook<span class="dot">.</span></h1>
+      <h1>Let it <span class="dot">cook</span>.</h1>
       <p class="tagline">
         Reviewing your coding agent's first pass is often a waste of your time. Cook puts your preferred agent in a "cook loop" and doesn't let it finish until it's actually done.
       </p>
@@ -260,7 +260,7 @@
      "If no major issues say DONE, else say ITERATE" \ <span class="comment"># gate prompt</span>
      "Fix the issues identified in the review"         <span class="comment"># iterate prompt</span></code></pre>
 
-      <p>By default, cook uses your local Claude Code instance for all the work, but you can also use codex or opencode.</p>
+      <p>By default, <span style="color: var(--accent); font-weight: 600;">cook uses your local Claude Code instance</span> for all the work, but you can also use codex or opencode.</p>
 
       <pre><code>cook "Implement dark mode" --agent opencode --agent-model z-ai/glm-4.7
 cook "Implement dark mode" --agent codex</code></pre>
