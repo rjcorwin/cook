@@ -1,6 +1,6 @@
 # Plan: Post-Race Improvements for Iterate/Next/Ralph
 
-**Status:** In progress
+**Status:** Done
 **Author:** rjcorwin + Claude
 **Created:** 2026-03-16
 **Source:** Synthesized from runs 2, 3, and 4 of the 20260316-050318 cook race

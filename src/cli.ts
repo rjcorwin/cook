@@ -635,6 +635,24 @@ async function cmdDoctor(args: string[]): Promise<void> {
   }
 }
 
+function resolveIterateNext(
+  parsed: ParsedArgs,
+  config: CookConfig,
+  overrides?: { iteratePrompt?: string; nextPrompt?: string; maxNexts?: number; gatePrompt?: string }
+): { iteratePrompt: string | undefined; nextPrompt: string | undefined; maxNexts: number; effectiveGatePrompt: string } {
+  const iteratePrompt = parsed.iteratePrompt
+    ?? (config.iterate ? (config.iteratePrompt ?? DEFAULT_ITERATE_PROMPT) : undefined)
+    ?? overrides?.iteratePrompt
+  const nextPrompt = parsed.nextPrompt
+    ?? (config.next ? (config.nextPrompt ?? DEFAULT_NEXT_PROMPT) : undefined)
+    ?? overrides?.nextPrompt
+  const maxNexts = parsed.maxNexts ?? config.maxNexts ?? overrides?.maxNexts ?? 3
+  const gatePrompt = overrides?.gatePrompt ?? parsed.gatePrompt
+  const effectiveGatePrompt = nextPrompt && gatePrompt === DEFAULT_GATE_PROMPT
+    ? DEFAULT_GATE_PROMPT_WITH_NEXT : gatePrompt
+  return { iteratePrompt, nextPrompt, maxNexts, effectiveGatePrompt }
+}
+
 async function runLoop(args: string[], overrides?: {
   iteratePrompt?: string
   nextPrompt?: string
@@ -651,19 +669,7 @@ async function runLoop(args: string[], overrides?: {
   const config = loadConfig(projectRoot)
   const { defaultAgent, defaultModel, stepConfig, runAgents } = resolveAgentPlan(parsed, config)
 
-  // Resolve iterate/next from CLI flags → config → overrides (keyword segments)
-  const iteratePrompt = parsed.iteratePrompt
-    ?? (config.iterate ? (config.iteratePrompt ?? DEFAULT_ITERATE_PROMPT) : undefined)
-    ?? overrides?.iteratePrompt
-  const nextPrompt = parsed.nextPrompt
-    ?? (config.next ? (config.nextPrompt ?? DEFAULT_NEXT_PROMPT) : undefined)
-    ?? overrides?.nextPrompt
-  const maxNexts = parsed.maxNexts ?? config.maxNexts ?? overrides?.maxNexts ?? 3
-
-  // Use NEXT-aware gate prompt when next is enabled
-  const gatePrompt = overrides?.gatePrompt ?? parsed.gatePrompt
-  const effectiveGatePrompt = nextPrompt && gatePrompt === DEFAULT_GATE_PROMPT
-    ? DEFAULT_GATE_PROMPT_WITH_NEXT : gatePrompt
+  const { iteratePrompt, nextPrompt, maxNexts, effectiveGatePrompt } = resolveIterateNext(parsed, config, overrides)
 
   const usedModes = [...new Set(STEP_NAMES.map(step => stepConfig[step].sandbox))]
   const sandboxLabel = usedModes.length === 1 ? usedModes[0] : usedModes.join(', ')
@@ -759,12 +765,7 @@ async function cmdRaceFromMultiplier(n: number, remaining: string[], judgePrompt
   const config = loadConfig(projectRoot)
   const { stepConfig, runAgents } = resolveAgentPlan(parsed, config)
 
-  const iteratePrompt = parsed.iteratePrompt
-    ?? (config.iterate ? (config.iteratePrompt ?? DEFAULT_ITERATE_PROMPT) : undefined)
-  const nextPrompt = parsed.nextPrompt
-    ?? (config.next ? (config.nextPrompt ?? DEFAULT_NEXT_PROMPT) : undefined)
-  const effectiveGatePrompt = nextPrompt && parsed.gatePrompt === DEFAULT_GATE_PROMPT
-    ? DEFAULT_GATE_PROMPT_WITH_NEXT : parsed.gatePrompt
+  const { iteratePrompt, nextPrompt, maxNexts, effectiveGatePrompt } = resolveIterateNext(parsed, config)
 
   await runRace(n, projectRoot, {
     workPrompt: parsed.workPrompt,
@@ -772,7 +773,7 @@ async function cmdRaceFromMultiplier(n: number, remaining: string[], judgePrompt
     gatePrompt: effectiveGatePrompt,
     iteratePrompt,
     nextPrompt,
-    maxNexts: parsed.maxNexts ?? config.maxNexts ?? 3,
+    maxNexts,
     maxIterations: parsed.maxIterations,
     stepConfig,
     config,
@@ -809,12 +810,7 @@ async function cmdRace(raceArgs: string[]): Promise<void> {
   const config = loadConfig(projectRoot)
   const { stepConfig, runAgents } = resolveAgentPlan(parsed, config)
 
-  const iteratePrompt = parsed.iteratePrompt
-    ?? (config.iterate ? (config.iteratePrompt ?? DEFAULT_ITERATE_PROMPT) : undefined)
-  const nextPrompt = parsed.nextPrompt
-    ?? (config.next ? (config.nextPrompt ?? DEFAULT_NEXT_PROMPT) : undefined)
-  const effectiveGatePrompt = nextPrompt && parsed.gatePrompt === DEFAULT_GATE_PROMPT
-    ? DEFAULT_GATE_PROMPT_WITH_NEXT : parsed.gatePrompt
+  const { iteratePrompt, nextPrompt, maxNexts, effectiveGatePrompt } = resolveIterateNext(parsed, config)
 
   await runRace(n, projectRoot, {
     workPrompt: parsed.workPrompt,
@@ -822,7 +818,7 @@ async function cmdRace(raceArgs: string[]): Promise<void> {
     gatePrompt: effectiveGatePrompt,
     iteratePrompt,
     nextPrompt,
-    maxNexts: parsed.maxNexts ?? config.maxNexts ?? 3,
+    maxNexts,
     maxIterations: parsed.maxIterations,
     stepConfig,
     config,
@@ -846,9 +842,11 @@ function extractRaceMultiplier(args: string[]): { n: number; before: string[]; j
         const remaining: string[] = []
         for (let j = 0; j < after.length; j++) {
           if (after[j].startsWith('--')) {
+            const flagName = after[j].includes('=') ? after[j].split('=')[0] : after[j]
             remaining.push(after[j])
-            // If it's a value flag, grab next arg too
-            if (j + 1 < after.length && !after[j + 1].startsWith('--')) {
+            // Only consume next arg as value for flags that take a value
+            if (j + 1 < after.length && !after[j + 1].startsWith('-')
+                && (VALUE_FLAGS.has(flagName) || HYBRID_FLAGS.has(flagName))) {
               remaining.push(after[j + 1])
               j++
             }
@@ -1149,6 +1147,11 @@ async function cmdKeywordSegments(rawArgs: string[]): Promise<void> {
   // Use NEXT-aware gate prompt when next is enabled
   const effectiveGatePrompt = nextPrompt && parsed.gatePrompt === DEFAULT_GATE_PROMPT
     ? DEFAULT_GATE_PROMPT_WITH_NEXT : parsed.gatePrompt
+
+  // M4: Warn if --next/-n is used with race alone (no outer ralph loop to act on NEXT verdicts)
+  if (raceSegment && !ralphSegment && (parsed.nextPrompt !== undefined || config.next)) {
+    logWarn('--next/-n flag has no effect with race alone (no outer ralph loop to receive NEXT verdicts)')
+  }
 
   if (ralphSegment && raceSegment) {
     // Composed mode: keywords compose right-to-left (rightmost = outermost)

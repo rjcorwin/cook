@@ -130,6 +130,7 @@ export function parseJudgeVerdict(output: string, maxRun: number): number | null
 // --- User prompts ---
 
 export function confirm(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return Promise.resolve(true)
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
     rl.question(question, answer => {
@@ -140,6 +141,7 @@ export function confirm(question: string): Promise<boolean> {
 }
 
 export function pickOne(question: string, count: number): Promise<number | null> {
+  if (!process.stdin.isTTY) return Promise.resolve(null)
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
     rl.question(question, answer => {
