@@ -8,6 +8,9 @@ interface AppState {
   step: string
   iteration: number
   maxIterations: number
+  nextCount: number
+  isIterating: boolean
+  isNext: boolean
   agent: AgentName
   model: string
   startTime: number
@@ -19,13 +22,15 @@ interface AppState {
 
 interface AppProps {
   maxIterations: number
+  maxNexts?: number
+  currentTask?: number
   agent: AgentName
   model: string
   showRequest: boolean
   animation: AnimationStyle
 }
 
-export function App({ maxIterations, agent, model, showRequest, animation }: AppProps) {
+export function App({ maxIterations, maxNexts, currentTask, agent, model, showRequest, animation }: AppProps) {
   const { exit } = useApp()
   const nextId = useRef(0)
   const itemsRef = useRef<StaticItem[]>([])
@@ -34,6 +39,9 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
     step: 'starting',
     iteration: 1,
     maxIterations,
+    nextCount: 0,
+    isIterating: false,
+    isNext: false,
     agent,
     model,
     startTime: Date.now(),
@@ -48,13 +56,21 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
 
     const onLogFile = (logFile: string) => setState(s => ({ ...s, logFile }))
 
-    const onStep = ({ step, iteration, agent, model }: { step: string; iteration: number; agent: AgentName; model: string }) =>
+    const onStep = ({ step, iteration, agent, model, nextCount, isIterating, isNext }: {
+      step: string; iteration: number; agent: AgentName; model: string;
+      nextCount?: number; isIterating?: boolean; isNext?: boolean
+    }) =>
       setState(s => {
         if (s.active) {
           itemsRef.current.push({ id: getId(), type: 'section-close', step: s.step })
         }
         itemsRef.current.push({ id: getId(), type: 'section-header', step, iteration })
-        return { ...s, step, iteration, agent, model, active: true }
+        return {
+          ...s, step, iteration, agent, model, active: true,
+          nextCount: nextCount ?? s.nextCount,
+          isIterating: isIterating ?? s.isIterating,
+          isNext: isNext ?? s.isNext,
+        }
       })
 
     const onPrompt = (prompt: string) =>
@@ -110,6 +126,12 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
 
   return (
     <Box flexDirection="column">
+      {maxNexts !== undefined && (
+        <Box>
+          <Text dimColor>Task {currentTask ?? (state.nextCount + 1)}/{maxNexts}{state.isNext ? ' (next)' : state.isIterating ? ' (iterating)' : ''}</Text>
+        </Box>
+      )}
+
       <LogStream
         items={[...itemsRef.current]}
         active={state.active}

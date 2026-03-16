@@ -14,18 +14,29 @@ export interface LoopConfig {
   workPrompt: string
   reviewPrompt: string
   gatePrompt: string
+  iteratePrompt?: string
+  nextPrompt?: string
+  maxNexts?: number
   steps: Record<StepName, LoopStepConfig>
   maxIterations: number
   projectRoot: string
 }
 
-const DONE_KEYWORDS = ['DONE', 'PASS', 'COMPLETE', 'APPROVE', 'ACCEPT']
-const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY']
+export interface LoopResult {
+  verdict: 'DONE' | 'ITERATE' | 'NEXT' | 'MAX_ITERATIONS' | 'ERROR'
+  iterations: number
+  nextCount: number
+}
 
-export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
+const DONE_KEYWORDS = ['DONE', 'PASS', 'COMPLETE', 'APPROVE', 'ACCEPT']
+const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY', 'CONTINUE']
+const NEXT_KEYWORDS = ['NEXT', 'ADVANCE']
+
+export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' | 'NEXT' {
   for (const line of output.split('\n')) {
     const upper = line.trim().toUpperCase()
     if (DONE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'DONE'
+    if (NEXT_KEYWORDS.some(kw => upper.startsWith(kw))) return 'NEXT'
     if (ITERATE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'ITERATE'
   }
   return 'ITERATE'
@@ -38,15 +49,24 @@ export async function agentLoop(
   config: LoopConfig,
   cookMD: string,
   events: EventEmitter,
-): Promise<void> {
+): Promise<LoopResult> {
   const logFile = createSessionLog(config.projectRoot)
   events.emit('logFile', logFile)
 
   let lastMessage = ''
+  let nextCount = 0
+  let iteration = 1
+  let currentWorkPrompt = config.workPrompt
+  let isIterating = false
+  let isNext = false
+  const maxNexts = config.maxNexts ?? 3
+  // In inline mode (no ralph keyword), handle NEXT internally.
+  // In composed mode, the caller sets nextPrompt but agentLoop returns NEXT.
+  const inlineNextMode = config.nextPrompt !== undefined
 
-  for (let i = 1; i <= config.maxIterations; i++) {
+  while (iteration <= config.maxIterations) {
     const steps = [
-      { name: 'work' as const, prompt: config.workPrompt },
+      { name: 'work' as const, prompt: currentWorkPrompt },
       { name: 'review' as const, prompt: config.reviewPrompt },
       { name: 'gate' as const, prompt: config.gatePrompt },
     ]
@@ -54,9 +74,12 @@ export async function agentLoop(
     for (const step of steps) {
       events.emit('step', {
         step: step.name,
-        iteration: i,
+        iteration,
         agent: config.steps[step.name].agent,
         model: config.steps[step.name].model,
+        nextCount,
+        isIterating,
+        isNext,
       })
 
       let output: string
@@ -65,9 +88,13 @@ export async function agentLoop(
           step: step.name,
           prompt: step.prompt,
           lastMessage,
-          iteration: i,
+          iteration,
           maxIterations: config.maxIterations,
           logFile,
+          nextCount,
+          maxNexts,
+          isIterating,
+          isNext,
         })
 
         events.emit('prompt', prompt)
@@ -76,13 +103,13 @@ export async function agentLoop(
           events.emit('line', line)
         })
       } catch (err) {
-        events.emit('error', `${step.name} step failed (iteration ${i}): ${err}`)
-        return
+        events.emit('error', `${step.name} step failed (iteration ${iteration}): ${err}`)
+        return { verdict: 'ERROR', iterations: iteration, nextCount }
       }
 
       lastMessage = output
       try {
-        appendToLog(logFile, step.name, i, output)
+        appendToLog(logFile, step.name, iteration, output)
       } catch (err) {
         console.error(`Warning: failed to write session log: ${err}`)
       }
@@ -92,12 +119,38 @@ export async function agentLoop(
     if (verdict === 'DONE') {
       logOK('Gate: DONE — loop complete')
       events.emit('done')
-      return
+      return { verdict: 'DONE', iterations: iteration, nextCount }
     }
-    if (i < config.maxIterations) {
-      logWarn(`Gate: ITERATE — continuing to iteration ${i + 1}`)
+    if (verdict === 'NEXT') {
+      if (!inlineNextMode) {
+        // No next prompt configured — treat as DONE (backward compat)
+        logOK('Gate: NEXT (no next prompt configured) — treating as DONE')
+        events.emit('done')
+        return { verdict: 'NEXT', iterations: iteration, nextCount }
+      }
+      nextCount++
+      if (nextCount >= maxNexts) {
+        logWarn(`Gate: NEXT — max nexts (${maxNexts}) reached — stopping`)
+        events.emit('done')
+        return { verdict: 'NEXT', iterations: iteration, nextCount }
+      }
+      logOK(`Gate: NEXT — advancing to task ${nextCount + 1}`)
+      iteration = 1
+      currentWorkPrompt = config.nextPrompt!
+      isIterating = false
+      isNext = true
+      continue
     }
+    // ITERATE
+    if (iteration < config.maxIterations) {
+      logWarn(`Gate: ITERATE — continuing to iteration ${iteration + 1}`)
+    }
+    iteration++
+    currentWorkPrompt = config.iteratePrompt ?? config.workPrompt
+    isIterating = true
+    isNext = false
   }
   logWarn(`Gate: max iterations (${config.maxIterations}) reached — stopping`)
   events.emit('done')
+  return { verdict: 'MAX_ITERATIONS', iterations: iteration - 1, nextCount }
 }

@@ -5,7 +5,7 @@ import path from 'path'
 import readline from 'readline'
 import React from 'react'
 import { render } from 'ink'
-import { agentLoop, type LoopConfig } from './loop.js'
+import { agentLoop, type LoopConfig, type LoopResult } from './loop.js'
 import { RunnerPool, type SandboxMode } from './runner.js'
 import { NativeRunner } from './native-runner.js'
 import { BareRunner } from './bare-runner.js'
@@ -24,6 +24,9 @@ interface RaceRunConfig {
   runAgents: AgentName[]
   showRequest: boolean
   judgePrompt?: string
+  iteratePrompt?: string
+  nextPrompt?: string
+  maxNexts?: number
 }
 
 export interface RunResult {
@@ -153,7 +156,7 @@ export async function runRace(
   n: number,
   projectRoot: string,
   raceConfig: RaceRunConfig,
-): Promise<void> {
+): Promise<LoopResult | null> {
   const session = sessionId()
 
   logPhase(`cook race \u2014 ${n} runs`)
@@ -210,6 +213,9 @@ export async function runRace(
       workPrompt: raceConfig.workPrompt,
       reviewPrompt: raceConfig.reviewPrompt,
       gatePrompt: raceConfig.gatePrompt,
+      iteratePrompt: raceConfig.iteratePrompt,
+      nextPrompt: raceConfig.nextPrompt,
+      maxNexts: raceConfig.maxNexts,
       steps: raceConfig.stepConfig,
       maxIterations: raceConfig.maxIterations,
       projectRoot: wt.worktreePath,
@@ -244,6 +250,11 @@ export async function runRace(
     }
   }
 
+  // Collect loop results for verdict propagation
+  const loopResults: (LoopResult | null)[] = settled.map(result =>
+    result.status === 'fulfilled' ? result.value : null
+  )
+
   // Build results
   const results: RunResult[] = settled.map((result, i) => ({
     index: i + 1,
@@ -271,13 +282,13 @@ export async function runRace(
   if (successfulRuns.length === 0) {
     logErr('All runs failed. No winner to pick.')
     await cleanupAll(projectRoot, results, session)
-    return
+    return null
   }
 
   if (successfulRuns.length === 1) {
     logOK(`Only Run ${successfulRuns[0].index} succeeded \u2014 auto-selecting as winner.`)
     await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session)
-    return
+    return loopResults[successfulRuns[0].index - 1]
   }
 
   // Judge step
@@ -301,7 +312,7 @@ export async function runRace(
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
     }
     await judgePool.stopAll()
-    return
+    return null
   }
   await judgePool.stopAll()
 
@@ -311,12 +322,13 @@ export async function runRace(
     for (const r of successfulRuns) {
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
     }
-    return
+    return null
   }
 
   console.error('')
   logOK(`Judge picked Run ${winner}`)
   await applyAndCleanup(projectRoot, results, winner, session)
+  return loopResults[winner - 1]
 }
 
 async function applyAndCleanup(

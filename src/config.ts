@@ -20,6 +20,11 @@ export interface CookConfig {
   agent: AgentName
   model?: string
   steps: Record<StepName, StepAgentConfig>
+  iterate?: boolean | string
+  iteratePrompt?: string
+  next?: boolean | string
+  nextPrompt?: string
+  maxNexts?: number
 }
 
 export interface StepSelection {
@@ -94,7 +99,17 @@ export function loadConfig(projectRoot: string): CookConfig {
       gate: parseStepAgentConfig(parsed.steps?.gate),
     }
     const sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
-    return { sandbox, env, animation, agent, model, steps }
+
+    // Iterate/next config
+    const iterate = parsed.iterate === true || typeof parsed.iterate === 'string' ? parsed.iterate : undefined
+    const iteratePrompt = typeof parsed.iteratePrompt === 'string' ? parsed.iteratePrompt
+      : typeof parsed.iterate === 'string' ? parsed.iterate : undefined
+    const next = parsed.next === true || typeof parsed.next === 'string' ? parsed.next : undefined
+    const nextPrompt = typeof parsed.nextPrompt === 'string' ? parsed.nextPrompt
+      : typeof parsed.next === 'string' ? parsed.next : undefined
+    const maxNexts = typeof parsed.maxNexts === 'number' && parsed.maxNexts > 0 ? parsed.maxNexts : undefined
+
+    return { sandbox, env, animation, agent, model, steps, iterate, iteratePrompt, next, nextPrompt, maxNexts }
   } catch (err) {
     logWarn(`Malformed .cook/config.json: ${err}`)
     return defaults
