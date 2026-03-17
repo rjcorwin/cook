@@ -7,7 +7,7 @@
 
 ### Original Request
 
-Extend the cook loop from 3 prompts (work, review, gate) to 4 (work, review, gate, iterate), and add a `ralph` keyword that wraps the cook loop with an outer gate for task progression. `race` and `vs` are composition operators that run multiple cook sessions — bare or ralph-extended — in parallel. The canonical ralph usage:
+Extend the cook from 3 prompts (work, review, gate) to 4 (work, review, gate, iterate), and add a `ralph` keyword that wraps the cook with an outer gate for task progression. `race` and `vs` are composition operators that run multiple loops — bare cook or ralph-extended — in parallel. The canonical ralph usage:
 
 ```sh
 cook "Read plan.md, mark the next incomplete task [in progress] and implement it" \
@@ -18,11 +18,11 @@ cook "Read plan.md, mark the next incomplete task [in progress] and implement it
      "If all tasks in plan.md are marked [done] say DONE, else say NEXT"
 ```
 
-The positional grammar is `cook <work> [review] [gate] [iterate] [max-iterations] ralph N "gate-prompt" [xN]`. Arguments before `ralph` are duck-typed: a number is `max-iterations`, any other string is the next positional prompt. `xN` after `ralph` races N ralph sessions in parallel. `vs` between two full cook invocations (with or without ralph) runs them as a fork-join.
+The positional grammar is `cook <work> [review] [gate] [iterate] [max-iterations] ralph N "gate-prompt" [xN]`. Arguments before `ralph` are duck-typed: a number is `max-iterations`, any other string is the next positional prompt. `xN` after `ralph` races N ralph loops in parallel. `vs` between two full loop definitions (with or without ralph) runs them in parallel.
 
-### The 4-prompt cook loop
+### The 4-prompt cook
 
-The cook loop is the core primitive: work → review → gate, with iterate as the step used in place of work when the gate says ITERATE.
+The cook is the core primitive: work → review → gate, with iterate as the step used in place of work when the gate says ITERATE.
 
 ```
 Pass 1:    work → review → gate
@@ -34,13 +34,13 @@ The iterate prompt is task-aware — in the ralph context it references the `[in
 
 ### Ralph outer gate
 
-The cook loop's gate handles quality control (DONE/ITERATE only). It cannot handle task orchestration — it runs in an isolated context and cannot see the task queue. Ralph adds an outer gate step that runs after the cook loop's gate says DONE. The ralph gate reads overall project state and returns NEXT (more tasks remain) or DONE (all complete).
+The cook's gate handles quality control (DONE/ITERATE only). It cannot handle task orchestration — it runs in an isolated context and cannot see the task queue. Ralph adds an outer gate step that runs after the cook's gate says DONE. The ralph gate reads overall project state and returns NEXT (more tasks remain) or DONE (all complete).
 
-The work prompt is self-directing — it picks the next incomplete task from project state on each ralph iteration. The cook loop's gate also does state management (marking the in-progress task as `[done]` before saying DONE), leaving the ralph gate to check overall completion.
+The work prompt is self-directing — it picks the next incomplete task from project state on each ralph iteration. The cook's gate also does state management (marking the in-progress task as `[done]` before saying DONE), leaving the ralph gate to check overall completion.
 
 ### Context
 
-The inner gate cannot distinguish "this task is done" from "all tasks are done" because it has no visibility into the task queue. The ralph outer gate solves this: after the inner gate says DONE, a separate ralph gate agent step runs with full project context and decides whether to advance (NEXT) or stop (DONE).
+The cook's gate cannot distinguish "this task is done" from "all tasks are done" because it has no visibility into the task queue. The ralph outer gate solves this: after the cook's gate says DONE, a separate ralph gate agent step runs with full project context and decides whether to advance (NEXT) or stop (DONE).
 
 ### Open Questions
 
@@ -50,7 +50,7 @@ These require explicit decisions before planning:
 
 2. **Inline-next (`-n`/`--next`): in scope?** A feature where the inner gate can return NEXT to switch the work prompt mid-loop without a ralph outer gate. This handles a different use case (ad-hoc task switching within one loop run) and is unrelated to ralph. Decision needed: include it here or defer?
 
-3. ~~**Race + ralph composition: in scope?**~~ **Resolved: yes.** Ralph is an extension of the core cook loop. Race and vs are composition operators that work on any cook session — bare or ralph. `cook w r g ralph 4 "gp" x3` races 3 ralph sessions; `cook w r g ralph 4 "gp" vs w r g ralph 4 "gp"` fork-joins two ralph sessions. `runRace` and fork-join dispatch need to accept a session execution function rather than calling `cookLoop` directly.
+3. ~~**Race + ralph composition: in scope?**~~ **Resolved: yes.** Ralph is an extension of the cook. Race and vs are composition operators that work on any loop — bare cook or ralph. `cook w r g ralph 4 "gp" x3` races 3 ralph loops; `cook w r g ralph 4 "gp" vs w r g ralph 4 "gp"` runs two ralph loops in parallel. `runRace` and vs dispatch need to accept a loop execution function rather than calling `cookLoop` directly.
 
 4. ~~**`race` keyword segment generalization: in scope?**~~ **Resolved: yes, required.** For `xN` to compose with ralph, the arg parser must detect both `ralph` and `xN` in the same invocation and produce a composed execution. The existing `extractRaceMultiplier` path needs to cooperate with ralph detection rather than run as a separate branch.
 
@@ -79,25 +79,25 @@ The codebase has no ralph-specific code. The current cook loop:
 | File | Change |
 |------|--------|
 | `src/loop.ts` | Rename `agentLoop` → `cookLoop`; add `iteratePrompt` to `LoopConfig`; return `CookLoopResult` with verdict |
-| `src/ralph.ts` | New file: `runRalph(ralphConfig, sessionFn)` — outer loop and ralph gate agent call |
-| `src/race.ts` | Accept a session function `() => Promise<CookLoopResult>` instead of calling `cookLoop` directly |
-| `src/fork-join.ts` | Same refactor as race: accept session functions to support ralph sessions in vs |
+| `src/ralph.ts` | New file: `runRalph(ralphConfig, loopFn)` — outer loop and ralph gate agent call |
+| `src/race.ts` | Accept a loop function `() => Promise<CookLoopResult>` instead of calling `cookLoop` directly |
+| `src/fork-join.ts` | Same refactor as race: accept loop functions to support ralph loops in vs |
 | `src/cli.ts` | Parse ralph keyword and xN together; build composed execution; update fork-join segment parsing |
 | `src/config.ts` | Add `'ralph'` to `StepName`; add `iteratePrompt` to loop config types; add ralph step config |
 
 ### Execution model
 
-The composable unit is a **cook session**: either a bare `cookLoop` or a `runRalph` wrapping one. Race and vs operate on sessions.
+The composable unit is a **loop**: either a bare `cookLoop` or a `runRalph` wrapping one. Race and vs operate on loops.
 
 ```
-session = cookLoop(config)                         // bare cook loop
-        | runRalph(ralphConfig, cookLoop(config))  // ralph-wrapped cook loop
+loop = cookLoop(config)                         // bare cook
+     | runRalph(ralphConfig, cookLoop(config))  // ralph-extended cook
 ```
 
 Composition:
 ```
-xN  → runRace(N, () => session)       // N sessions in parallel worktrees
-vs  → forkJoin([session, session, …]) // N sessions in parallel, joined
+race N  → runRace(N, () => loop)       // N loops in parallel worktrees
+vs      → runVs([loop, loop, …])       // N loops in parallel, resolved
 ```
 
 ### Data Flow (proposed)
@@ -105,8 +105,8 @@ vs  → forkJoin([session, session, …]) // N sessions in parallel, joined
 ```
 cli.ts parses args
   → if vs-syntax
-      → parse each vs-segment as a session config (loopConfig + optional ralphConfig)
-      → forkJoin(segments.map(s => () => s.ralph ? runRalph(s, cookLoop) : cookLoop(s)))
+      → parse each vs-segment as a loop config (cookConfig + optional ralphConfig)
+      → runVs(segments.map(s => () => s.ralph ? runRalph(s, cookLoop) : cookLoop(s)))
   → else
       → parse loopConfig from base positional args
       → parse optional ralphConfig (ralph keyword)
@@ -116,7 +116,7 @@ cli.ts parses args
       → if race only    → runRace(N, () => cookLoop(loopConfig))
       → else            → cookLoop(loopConfig)
 
-runRalph(ralphConfig, sessionFn):
+runRalph(ralphConfig, loopFn):
   loop n = 1..maxNexts:
     → sessionFn() → CookLoopResult
     → if DONE → run ralph gate step
@@ -130,7 +130,7 @@ runRalph(ralphConfig, sessionFn):
 - **No behavior change to existing commands**: `cook "w" "r" "g" 5`, `cook "w" x3 "criteria"`, `cook "w" vs "w"` must all work identically.
 - **Inline-next unaffected**: If included, `-n`/`--next` goes through `runLoop` only, never through `runRalph`.
 - **Ralph gate prompt is required**: Missing prompt is an error with a helpful example, not a silent default.
-- **Session log is shared**: Ralph gate receives the same session log as the cook loop for full context.
+- **Session log is shared**: Ralph gate receives the same session log as the cook for full context.
 - **Ralph gate falls back to gate step config**: If no `steps.ralph` config is set, use the gate step's agent/model/sandbox.
 
 ## Prior Art
