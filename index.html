@@ -47,17 +47,7 @@
       pointer-events: none;
     }
 
-    /* === LIGHTNING CANVAS === */
-    #lightning-canvas {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 1;
-      pointer-events: none;
-      opacity: 0.7;
-    }
-
-    .container {
+.container {
       max-width: 900px;
       margin: 0 auto;
       position: relative;
@@ -589,7 +579,7 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
       }
-      #starfield, #lightning-canvas {
+      #starfield {
         display: none;
       }
       .fire-particle {
@@ -611,7 +601,6 @@
 </head>
 <body>
   <canvas id="starfield"></canvas>
-  <canvas id="lightning-canvas"></canvas>
 
   <div class="container">
 
@@ -992,75 +981,6 @@ Read the session log for full context from previous steps.</code></pre>
       requestAnimationFrame(drawStars);
     }
     drawStars();
-
-    // === LIGHTNING ===
-    const lCanvas = document.getElementById('lightning-canvas');
-    const lCtx = lCanvas.getContext('2d');
-
-    function resizeLightning() {
-      lCanvas.width = window.innerWidth;
-      lCanvas.height = window.innerHeight;
-    }
-    resizeLightning();
-    window.addEventListener('resize', resizeLightning);
-
-    function drawLightningBolt(x, y, angle, length, branches, width) {
-      if (branches <= 0 || length < 5) return;
-
-      const segments = Math.floor(length / 10);
-      lCtx.beginPath();
-      lCtx.moveTo(x, y);
-      lCtx.strokeStyle = `rgba(0, 212, 255, ${0.3 + Math.random() * 0.5})`;
-      lCtx.lineWidth = width;
-
-      let cx = x, cy = y;
-      for (let i = 0; i < segments; i++) {
-        const jitter = (Math.random() - 0.5) * 30;
-        cx += Math.cos(angle) * 10 + jitter;
-        cy += Math.sin(angle) * 10 + jitter * 0.5;
-        lCtx.lineTo(cx, cy);
-
-        if (Math.random() < 0.2 && branches > 1) {
-          drawLightningBolt(cx, cy, angle + (Math.random() - 0.5) * 1.5, length * 0.4, branches - 1, width * 0.6);
-        }
-      }
-      lCtx.stroke();
-    }
-
-    let nextLightning = 0;
-    let lightningVisible = false;
-    let lightningFadeTime = 0;
-    const LIGHTNING_DISPLAY_MS = 150;
-
-    function lightningLoop() {
-      if (prefersReducedMotion()) { requestAnimationFrame(lightningLoop); return; }
-
-      const now = Date.now();
-
-      if (lightningVisible && now > lightningFadeTime) {
-        lCtx.clearRect(0, 0, lCanvas.width, lCanvas.height);
-        lightningVisible = false;
-      }
-
-      if (!lightningVisible && now > nextLightning) {
-        lCtx.clearRect(0, 0, lCanvas.width, lCanvas.height);
-        lCtx.shadowColor = '#00d4ff';
-        lCtx.shadowBlur = 20;
-        const x = Math.random() * lCanvas.width;
-        drawLightningBolt(x, 0, Math.PI / 2 + (Math.random() - 0.5) * 0.5, 200 + Math.random() * 300, 3, 2);
-        // Glow pass
-        lCtx.shadowBlur = 0;
-        lCtx.strokeStyle = `rgba(191, 0, 255, 0.15)`;
-        lCtx.lineWidth = 6;
-        lCtx.stroke();
-        lightningVisible = true;
-        lightningFadeTime = now + LIGHTNING_DISPLAY_MS;
-        nextLightning = now + 2000 + Math.random() * 6000;
-      }
-
-      requestAnimationFrame(lightningLoop);
-    }
-    lightningLoop();
 
     // === FIRE PARTICLES ===
     const MAX_FIRE_PARTICLES = 30;
