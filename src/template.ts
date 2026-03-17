@@ -8,6 +8,10 @@ export interface LoopContext {
   iteration: number
   maxIterations: number
   logFile: string
+  ralphIteration?: number
+  maxRalph?: number
+  repeatPass?: number
+  maxRepeatPasses?: number
 }
 
 export const DEFAULT_COOK_MD = `# COOK.md
@@ -29,6 +33,7 @@ Read the session log for full context from previous steps.
 `
 
 let cachedTemplateSrc: string | null = null
+let cachedParamKey: string | null = null
 let cachedTemplateFn: Function | null = null
 
 export function renderTemplate(cookMD: string, ctx: LoopContext): string {
@@ -36,9 +41,11 @@ export function renderTemplate(cookMD: string, ctx: LoopContext): string {
     .replace(/`/g, '\\`')
     .replace(/\$(?!\{)/g, '\\$')
 
+  const paramKey = Object.keys(ctx).join(',')
+
   try {
     let fn: Function
-    if (cachedTemplateSrc === escaped && cachedTemplateFn) {
+    if (cachedTemplateSrc === escaped && cachedParamKey === paramKey && cachedTemplateFn) {
       fn = cachedTemplateFn
     } else {
       fn = new Function(
@@ -46,6 +53,7 @@ export function renderTemplate(cookMD: string, ctx: LoopContext): string {
         `return \`${escaped}\``
       )
       cachedTemplateSrc = escaped
+      cachedParamKey = paramKey
       cachedTemplateFn = fn
     }
     return fn(...Object.values(ctx))

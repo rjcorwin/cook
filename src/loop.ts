@@ -14,9 +14,24 @@ export interface LoopConfig {
   workPrompt: string
   reviewPrompt: string
   gatePrompt: string
+  iteratePrompt?: string
   steps: Record<StepName, LoopStepConfig>
   maxIterations: number
   projectRoot: string
+  // Seed lastMessage with output from a compound inner node (e.g., repeat before review)
+  initialLastMessage?: string
+  // Extra template context passed through from executor
+  ralphIteration?: number
+  maxRalph?: number
+  repeatPass?: number
+  maxRepeatPasses?: number
+}
+
+export interface LoopResult {
+  verdict: 'DONE' | 'ITERATE' | 'MAX_ITERATIONS'
+  iterations: number
+  lastMessage: string
+  logFile: string
 }
 
 const DONE_KEYWORDS = ['DONE', 'PASS', 'COMPLETE', 'APPROVE', 'ACCEPT']
@@ -38,46 +53,58 @@ export async function agentLoop(
   config: LoopConfig,
   cookMD: string,
   events: EventEmitter,
-): Promise<void> {
+): Promise<LoopResult> {
   const logFile = createSessionLog(config.projectRoot)
   events.emit('logFile', logFile)
 
-  let lastMessage = ''
+  let lastMessage = config.initialLastMessage ?? ''
 
   for (let i = 1; i <= config.maxIterations; i++) {
-    const steps = [
-      { name: 'work' as const, prompt: config.workPrompt },
-      { name: 'review' as const, prompt: config.reviewPrompt },
-      { name: 'gate' as const, prompt: config.gatePrompt },
+    // Iteration 1: work → review → gate
+    // Iteration 2+: iterate (or work) → review → gate
+    const workStepName: StepName = (i > 1 && config.iteratePrompt) ? 'iterate' : 'work'
+    const workPrompt = (i > 1 && config.iteratePrompt) ? config.iteratePrompt : config.workPrompt
+
+    const steps: { name: StepName; prompt: string }[] = [
+      { name: workStepName, prompt: workPrompt },
+      { name: 'review', prompt: config.reviewPrompt },
+      { name: 'gate', prompt: config.gatePrompt },
     ]
 
     for (const step of steps) {
+      const stepConfig = config.steps[step.name]
+
       events.emit('step', {
         step: step.name,
         iteration: i,
-        agent: config.steps[step.name].agent,
-        model: config.steps[step.name].model,
+        agent: stepConfig.agent,
+        model: stepConfig.model,
       })
 
       let output: string
       try {
-        const prompt = renderTemplate(cookMD, {
+        const ctx: LoopContext = {
           step: step.name,
           prompt: step.prompt,
           lastMessage,
           iteration: i,
           maxIterations: config.maxIterations,
           logFile,
-        })
+          ralphIteration: config.ralphIteration,
+          maxRalph: config.maxRalph,
+          repeatPass: config.repeatPass,
+          maxRepeatPasses: config.maxRepeatPasses,
+        }
+        const prompt = renderTemplate(cookMD, ctx)
 
         events.emit('prompt', prompt)
-        const runner = await getRunner(config.steps[step.name].sandbox)
-        output = await runner.runAgent(config.steps[step.name].agent, config.steps[step.name].model, prompt, (line) => {
+        const runner = await getRunner(stepConfig.sandbox)
+        output = await runner.runAgent(stepConfig.agent, stepConfig.model, prompt, (line) => {
           events.emit('line', line)
         })
       } catch (err) {
         events.emit('error', `${step.name} step failed (iteration ${i}): ${err}`)
-        return
+        return { verdict: 'ITERATE', iterations: i, lastMessage, logFile }
       }
 
       lastMessage = output
@@ -92,7 +119,7 @@ export async function agentLoop(
     if (verdict === 'DONE') {
       logOK('Gate: DONE — loop complete')
       events.emit('done')
-      return
+      return { verdict: 'DONE', iterations: i, lastMessage, logFile }
     }
     if (i < config.maxIterations) {
       logWarn(`Gate: ITERATE — continuing to iteration ${i + 1}`)
@@ -100,4 +127,5 @@ export async function agentLoop(
   }
   logWarn(`Gate: max iterations (${config.maxIterations}) reached — stopping`)
   events.emit('done')
+  return { verdict: 'MAX_ITERATIONS', iterations: config.maxIterations, lastMessage, logFile }
 }
