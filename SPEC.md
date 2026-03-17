@@ -13,6 +13,29 @@ Cook is built from two categories of operators:
 - **vs** — 2+ different loops in parallel worktrees
 - **resolvers** (`pick`, `merge`, `compare`) — determine the outcome of a composition
 
+Brainstorm...
+
+```sh
+cook "<work>" ["<review>"] ["<gate>"] ["<iterate>"] [max-iterations] \
+     [ralph [N] "<ralph-gate>"] \
+     [vs "<work>" ... [ralph ...]] [pick | merge | compare] ["<criteria>"] \
+     [race N] [pick | merge | compare] ["<criteria>"] \
+```
+
+loop[vs loop ... [resolver]] [race [resolver]]
+
+```
+expr = loop [race N | vs loop [vs loop]*] [resolver] [race N [resolver]]
+```
+
+A loop, optionally composed with `race` or `vs` and a resolver, optionally raced again with a second resolver.
+
+No this! ->
+
+```
+expr = loop [[race N | vs loop [vs loop]*] [resolver]] [race N [resolver]]
+```
+
 ---
 
 ## The Loop
