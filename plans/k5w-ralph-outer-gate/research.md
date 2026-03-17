@@ -32,13 +32,26 @@ The proposed fix separates them. The inner gate only deals with DONE/ITERATE. Th
 
 ### Open Questions
 
-- What is the default ralph gate prompt when the user doesn't provide one?
-- Does the ralph gate run as a new agent invocation (expensive) or can it be lightweight?
-- Does the ralph gate share the session log with the inner loop, or does it get fresh context?
-- What step config (agent, model, sandbox) does the ralph gate use? Same as inner gate? Separately configurable?
-- What happens to the existing `-n` / `--next` inline-next feature? It's unrelated to ralph and should stay, but needs to be clearly separated.
-- What happens to `maxNexts`? It currently limits NEXT transitions — does it become the ralph loop limit (max tasks)?
-- Should the ralph gate step be visible in the TUI?
+- ~~What is the default ralph gate prompt when the user doesn't provide one?~~
+  **Decision:** No default. Ralph gate prompt is required; missing prompt is an error with a helpful example suggestion.
+
+- ~~Does the ralph gate run as a new agent invocation (expensive) or can it be lightweight?~~
+  **Decision:** Full agent invocation (same mechanism as other steps).
+
+- ~~Does the ralph gate share the session log with the inner loop, or does it get fresh context?~~
+  **Decision:** Shared session log. Ralph gate sees everything the inner loop produced.
+
+- ~~What step config (agent, model, sandbox) does the ralph gate use? Same as inner gate? Separately configurable?~~
+  **Decision:** Separately configurable via `steps.ralph` in config and `--ralph-agent`/`--ralph-model` CLI flags, falling back to gate step config.
+
+- ~~What happens to the existing `-n` / `--next` inline-next feature? It's unrelated to ralph and should stay, but needs to be clearly separated.~~
+  **Decision:** Unaffected. Inline-next goes through `runLoop` directly, not `runRalph`.
+
+- ~~What happens to `maxNexts`? It currently limits NEXT transitions — does it become the ralph loop limit (max tasks)?~~
+  **Decision:** Becomes the ralph loop limit (max tasks / max NEXT transitions from ralph gate).
+
+- ~~Should the ralph gate step be visible in the TUI?~~
+  **Decision:** Log line only (e.g. `▸ ralph gate — checking for more tasks...`). Not a full TUI step.
 
 ## System Architecture
 
