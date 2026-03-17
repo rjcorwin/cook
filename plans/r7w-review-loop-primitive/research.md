@@ -41,7 +41,7 @@ The spec (SPEC.md) was written as the canonical definition of how cook should wo
 
 5. **Where does `xN` live in the execution model?** The spec says `xN` wraps everything to its left. For `cook "work" x3 review x3`, the execution is ((work×3 → review loop) ×3). This implies xN is an operator that wraps the current "pipeline so far" into a group and repeats it. The execution engine needs to support nesting. Is this a recursive data structure (AST) or can it be flattened?
 
-6. **Template variables for ralph.** SPEC.md lists `${ralphIteration}` and `${maxRalph}`. These aren't in the current `LoopContext` type. When adding them, should they be undefined/empty when not in a ralph context, or should the template conditionally include them?
+6. ~~**Template variables for repeat and ralph.**~~ **Resolved: dedicated vars, undefined when inactive.** Add `${repeatPass}` / `${maxRepeatPasses}` for xN repeat, `${ralphIteration}` / `${maxRalph}` for ralph. All are undefined when their respective operator isn't active. Templates use conditional logic (e.g. `${repeatPass ? '...' : ''}`) to include them only when defined. Default COOK.md template does not include repeat or ralph vars — users add them when needed.
 
 7. **`compare` resolver behavior.** The spec says compare writes to `.cook/compare-<session>.md` and cannot be followed by a second composition. Current `summarize` writes to `.cook/fork/<session>/comparison.md`. Align the path?
 
