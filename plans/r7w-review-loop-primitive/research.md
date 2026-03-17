@@ -33,7 +33,7 @@ The spec (SPEC.md) was written as the canonical definition of how cook should wo
 
 1. **Rename or alias `judge`→`pick`, `summarize`→`compare`?** The spec uses `pick`/`merge`/`compare`. The implementation uses `judge`/`merge`/`summarize`. Should we hard-cut to new names, or keep old names as aliases for backwards compatibility? The codebase is pre-1.0 and the old names aren't documented externally — a hard cut seems fine.
 
-2. **Should `review` keyword with no prompts imply the review loop, or should bare `cook "work"` also run review?** The spec says `cook "work"` is a single LLM call with no review. `cook "work" review` adds the review loop with defaults. This is a behavior change from current code where `cook "work"` always runs work→review→gate. **Decision needed: does bare `cook "work"` skip review?**
+2. ~~**Should `review` keyword with no prompts imply the review loop, or should bare `cook "work"` also run review?**~~ **Resolved: yes, skip review.** `cook "work"` is a single sandboxed LLM call — no review loop. This makes bare cook valuable as a simple way to run a prompt in the configured sandbox (especially useful with docker). `cook "work" review` explicitly opts into the review loop.
 
 3. **Parser architecture: single-pass left-to-right or multi-phase?** The spec grammar composes left to right. Current code has three separate parsers (`parseArgs`, `extractRaceMultiplier`, `parseForkJoinArgs`) with a routing decision in `main()`. The spec's grammar could be handled by a single left-to-right token scanner. Decision: rewrite as one unified parser?
 
