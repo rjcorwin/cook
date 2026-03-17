@@ -26,19 +26,7 @@ An optional **iterate prompt** (4th positional) overrides the work prompt on fix
 
 ### Context
 
-Two prior plans explored this space:
-
-**p7x-iterate-next-ralph** (implemented, then superseded): Added iterate prompt, NEXT as an inner gate verdict, `ralph` keyword, and race+ralph composition. The core problem: the inner gate runs in an isolated agentLoop and cannot see the task queue. When a task completes, the gate correctly says DONE — but ralph interprets DONE as "all work finished" and exits. The gate has no reliable way to distinguish "this task is done" from "all tasks are done."
-
-**k5w-ralph-outer-gate** (planned, never implemented): Redesigned ralph around a dedicated outer gate step. The inner gate returns only DONE/ITERATE. After inner DONE, ralph runs a separate ralph gate agent call that reads overall project state. The ralph string param becomes the ralph gate prompt (not a next-task work prompt). This design was established as the correct architecture but was never implemented before the branch was shelved.
-
-This plan starts from the current main branch (no ralph code) and implements the k5w architecture cleanly, incorporating what is useful from p7x without the parts that led to the design problem.
-
-### What We Are Not Carrying Forward
-
-- **NEXT as an inner gate verdict in ralph context**: The inner gate does not return NEXT when ralph is active. The ralph gate handles advancement.
-- **The next-task work prompt**: In k5w, the work prompt is the same for every ralph iteration. It is self-directing; it reads project state to find the next task.
-- **The `DEFAULT_GATE_PROMPT_WITH_NEXT` injection into the inner gate**: Not needed when the inner gate stays at DONE/ITERATE.
+The inner gate runs in an isolated agentLoop and cannot see the task queue — so it cannot distinguish "this task is done" from "all tasks are done." The ralph outer gate solves this by separating the concerns: the inner gate handles quality control (DONE/ITERATE only), and a separate ralph gate agent step handles orchestration, reading overall project state to decide whether to advance (NEXT) or stop (DONE).
 
 ### Open Questions
 
@@ -108,18 +96,10 @@ cli.ts parses args
 
 ## Prior Art
 
-### k5w data flow diagram
+### Keyword segment parsing
 
-The k5w plan includes a precise before/after data flow that resolves the core design question. The proposed architecture is taken directly from k5w's "Data Flow (proposed)" section — this is the established decision.
-
-### p7x keyword segment parser
-
-p7x designed a `KeywordSegment` interface and duck-typing rules (number = count/limit; other string = prompt) for parsing keyword params in any order. This parser design is sound and reusable for `ralph` regardless of whether `race` is migrated to the same system.
-
-### `parseForkJoinArgs()` in cli.ts
-
-The existing fork-join arg parser is a good model for left-to-right positional parsing with duck-typed params. The ralph keyword parser should follow the same style.
+The `parseForkJoinArgs()` function in `cli.ts` is a good model for left-to-right positional parsing with duck-typed params. The ralph keyword parser should follow the same style. Duck-typing rules: a positive integer → numeric param (count/limit); any other string → string param (prompt); `--flags` are not consumed as keyword params.
 
 ### agentLoop return value
 
-Currently `agentLoop` returns `void`. For ralph to work, it needs to return a result so the outer wrapper knows whether the inner loop ended with DONE, MAX_ITERATIONS, or ERROR. The return type `LoopResult { verdict: 'DONE' | 'ITERATE' | 'MAX_ITERATIONS' | 'ERROR', iterations: number }` from p7x is the right shape.
+Currently `agentLoop` returns `void`. For ralph to work, it needs to return a result so the outer wrapper knows how the inner loop ended. The return type should be `LoopResult { verdict: 'DONE' | 'MAX_ITERATIONS' | 'ERROR', iterations: number }`.
