@@ -41,7 +41,7 @@ That's it — one agent call, done.
 
 ## xN (repeat)
 
-`xN` runs work N times sequentially. Each pass sees the output of the previous pass, allowing the agent to refine its own work without the overhead of a separate review/gate cycle.
+`xN` repeats everything to its left N times sequentially. Each pass sees the output of the previous pass, allowing the agent to refine its own work. Position determines what gets repeated — `xN` wraps leftward:
 
 ```sh
 cook "Implement dark mode" x3
@@ -53,15 +53,23 @@ Pass 2: work (sees pass 1 output)
 Pass 3: work (sees pass 2 output)
 ```
 
-Position relative to `review` matters:
+### Nesting
+
+`xN` wraps everything to its left into a group and repeats that group. Multiple `xN` operators nest like parentheses:
 
 ```sh
-cook "work" x3 review          # 3 work passes, then review loop
-cook "work" review x3          # review loop repeated 3 times
-cook "work" x3 review x3       # 3 work passes → review loop, all repeated 3 times
+cook "work" x3                 # (work) ×3
+cook "work" x3 review          # ((work) ×3 → review)
+cook "work" review x3          # ((work → review) ×3)
+cook "work" x3 review x3       # (((work) ×3 → review) ×3)
 ```
 
+Expanded:
+
 ```
+cook "work" x3:
+  work → work → work
+
 cook "work" x3 review:
   work → work → work → review → gate → (iterate if needed)
 
@@ -75,6 +83,8 @@ cook "work" x3 review x3:
   Round 2: work×3 → review loop
   Round 3: work×3 → review loop
 ```
+
+`x1` is valid and equivalent to no `xN` (a no-op).
 
 ---
 
@@ -245,6 +255,12 @@ Each branch is a full cook definition — work prompt, optionally with xN, revie
 cook "Implement auth with JWT" vs "Implement auth with sessions" pick "best security and simplicity"
 ```
 
+Each branch can have its own `xN`:
+
+```sh
+cook "JWT auth" x3 vs "Session auth" x5 pick "best security"
+```
+
 ```sh
 cook "Build with React" review "Check accessibility" "DONE if WCAG AA" 3 \
   vs \
@@ -281,6 +297,8 @@ cook "Approach A" vs "Approach B" merge "cleanest implementation"
 cook "Approach A" vs "Approach B" compare
 cook "Approach A" v3                        # pick with no criteria
 ```
+
+`v1` is valid and equivalent to no versioning (a no-op).
 
 ---
 
