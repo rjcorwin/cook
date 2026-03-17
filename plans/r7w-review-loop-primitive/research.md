@@ -41,15 +41,15 @@ The spec (SPEC.md) was written as the canonical definition of how cook should wo
 
 6. ~~**Template variables for repeat and ralph.**~~ **Resolved: dedicated vars, undefined when inactive.** Add `${repeatPass}` / `${maxRepeatPasses}` for xN repeat, `${ralphIteration}` / `${maxRalph}` for ralph. All are undefined when their respective operator isn't active. Templates use conditional logic (e.g. `${repeatPass ? '...' : ''}`) to include them only when defined. Default COOK.md template does not include repeat or ralph vars — users add them when needed.
 
-7. **`compare` resolver behavior.** The spec says compare writes to `.cook/compare-<session>.md` and cannot be followed by a second composition. Current `summarize` writes to `.cook/fork/<session>/comparison.md`. Align the path?
+7. ~~**`compare` resolver behavior.**~~ **Resolved: align to spec.** Output goes to `.cook/compare-<session>.md` as the spec defines. Simpler flat path, no nested directories. Current `summarize` path (`.cook/fork/<session>/comparison.md`) is replaced.
 
-8. **`race N` vs `vN` — are these truly identical?** The spec says `vN` is shorthand for `race N`. In the implementation, should `race` be a first-class keyword (like `cook "work" race 3`) in addition to the `vN` shorthand? The spec grammar shows both forms.
+8. ~~**`race N` vs `vN` — are these truly identical?**~~ **Resolved: yes, both are keywords.** `race` is a first-class keyword (`cook "work" race 3`), and `vN` is shorthand for `race N`. Parser accepts both forms. For consistency, `xN` also has a long-form keyword `repeat N` (same pattern: `xN` is shorthand for `repeat N`).
 
-9. **Default resolver.** The spec says `pick` is the default when none is specified. Current implementation defaults to `merge` for fork-join. This is a behavior change.
+9. ~~**Default resolver.**~~ **Resolved: `pick` is default.** Aligns to spec. This is a behavior change from the current `merge` default. Major version, so acceptable.
 
-10. **MAX_ITERATIONS behavior in ralph.** From z4h research, open question #5: when the cook loop hits max iterations without DONE, should ralph advance to the next task or stop? The spec doesn't address this explicitly.
+10. ~~**MAX_ITERATIONS behavior in ralph.**~~ **Resolved: stop with default of 100.** When the inner review loop hits max iterations without DONE, ralph stops entirely (does not advance to next task). If the inner loop can't converge, blindly advancing is dangerous. A warning is logged. Default ralph max tasks is 100.
 
-11. **Inline-next (`-n`/`--next`) from z4h research — in scope?** This was an open question in the ralph research. It allows the inner gate to return NEXT without ralph. Decision: defer or include?
+11. ~~**Inline-next (`-n`/`--next`) from z4h research — in scope?**~~ **Resolved: deferred.** This is a convenience shortcut that lets the inner gate return NEXT (advance to next task) without the full ralph outer loop. Not core to the grammar — ship without it, add later if demand emerges.
 
 ## System Architecture
 
