@@ -3,304 +3,268 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cook — Let it cook. 🔥⚡🚀</title>
+  <title>cook — Let it cook.</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
     :root {
-      --bg: #050510;
-      --surface: #0a0a2e;
-      --border: #ff6b0088;
-      --text: #f0e6ff;
-      --text-muted: #a89ec8;
-      --fire-1: #ff4500;
-      --fire-2: #ff6b00;
-      --fire-3: #ffa500;
-      --fire-4: #ffdd00;
-      --lightning: #00d4ff;
-      --lightning-2: #7b68ee;
-      --electric: #bf00ff;
-      --code-bg: #0d0d30;
-      --link: #00d4ff;
-      --neon-pink: #ff00aa;
-      --neon-green: #00ff88;
+      --bg: #1a0a30;
+      --surface: #2d1b4e;
+      --border: #f0d040;
+      --text: #f8f0e0;
+      --text-muted: #b8a8d0;
+      --yellow: #f0d040;
+      --orange: #e86820;
+      --red: #d03030;
+      --pink: #f07098;
+      --blue: #4898f8;
+      --cyan: #40d8d0;
+      --green: #58c830;
+      --purple: #9058d0;
+      --dark-purple: #0e0620;
+      --window-bg: #180830;
+      --window-border-outer: #f8f0e0;
+      --window-border-inner: #5828a0;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Press Start 2P', monospace;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      line-height: 2;
       padding: 0;
       overflow-x: hidden;
-      position: relative;
+      image-rendering: pixelated;
+      background-image:
+        radial-gradient(circle at 20% 20%, #2d1b5e 0%, transparent 40%),
+        radial-gradient(circle at 80% 60%, #1a1048 0%, transparent 40%),
+        radial-gradient(circle at 50% 90%, #281050 0%, transparent 30%);
     }
 
-    /* === STARFIELD BACKGROUND === */
-    #starfield {
+    /* === PIXEL GRID OVERLAY === */
+    body::after {
+      content: '';
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
-      z-index: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 0, 0, 0.06) 3px,
+        rgba(0, 0, 0, 0.06) 4px
+      );
       pointer-events: none;
+      z-index: 100;
     }
 
-.container {
-      max-width: 900px;
+    .container {
+      max-width: 840px;
       margin: 0 auto;
       position: relative;
       z-index: 10;
       padding: 0 1.5rem 2rem;
     }
 
+    /* === EARTHBOUND WINDOW BOX === */
+    .eb-window {
+      background: var(--window-bg);
+      border: 4px solid var(--window-border-outer);
+      box-shadow:
+        inset 0 0 0 4px var(--window-border-inner),
+        8px 8px 0 rgba(0, 0, 0, 0.4);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
     /* === HERO === */
     .hero {
       text-align: center;
-      padding: 5rem 0 3rem;
-      margin-bottom: 3rem;
-      position: relative;
-    }
-
-    .hero::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 10%; right: 10%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--fire-1), var(--fire-3), var(--lightning), var(--fire-3), var(--fire-1), transparent);
-      animation: borderPulse 3s ease-in-out infinite;
-    }
-
-    @keyframes borderPulse {
-      0%, 100% { opacity: 0.6; filter: blur(1px); }
-      50% { opacity: 1; filter: blur(0px); }
+      padding: 4rem 0 2rem;
+      margin-bottom: 2rem;
     }
 
     .hero h1 {
-      font-family: 'Orbitron', monospace;
-      font-size: 5rem;
-      font-weight: 900;
+      font-size: 3rem;
       margin-bottom: 0.5rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      position: relative;
+      letter-spacing: 0.05em;
       display: inline-block;
     }
 
     .hero h1 .let-it {
-      color: #fff;
-      text-shadow:
-        0 0 10px rgba(255,255,255,0.5),
-        0 0 40px rgba(255,255,255,0.2);
+      color: var(--text);
     }
 
     .hero h1 .dot {
-      background: linear-gradient(135deg, var(--fire-1), var(--fire-3), var(--fire-4));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      filter: drop-shadow(0 0 20px var(--fire-2)) drop-shadow(0 0 40px var(--fire-1));
-      animation: fireGlow 2s ease-in-out infinite alternate;
-    }
-
-    @keyframes fireGlow {
-      0% { filter: drop-shadow(0 0 20px var(--fire-2)) drop-shadow(0 0 40px var(--fire-1)); }
-      100% { filter: drop-shadow(0 0 30px var(--fire-3)) drop-shadow(0 0 60px var(--fire-2)) drop-shadow(0 0 80px var(--fire-1)); }
+      color: var(--yellow);
+      animation: colorCycle 4s steps(4) infinite;
     }
 
     .hero h1 .period {
-      color: var(--lightning);
-      text-shadow: 0 0 20px var(--lightning), 0 0 40px var(--lightning), 0 0 80px var(--lightning);
-      animation: lightningFlicker 4s infinite;
+      color: var(--orange);
+      animation: blink 1s steps(1) infinite;
     }
 
-    @keyframes lightningFlicker {
-      0%, 95%, 100% { opacity: 1; text-shadow: 0 0 20px var(--lightning), 0 0 40px var(--lightning); }
-      96% { opacity: 0.3; text-shadow: none; }
-      97% { opacity: 1; text-shadow: 0 0 40px var(--lightning), 0 0 80px var(--lightning), 0 0 120px var(--lightning); }
-      98% { opacity: 0.6; }
+    @keyframes colorCycle {
+      0% { color: var(--yellow); }
+      25% { color: var(--orange); }
+      50% { color: var(--pink); }
+      75% { color: var(--cyan); }
+    }
+
+    @keyframes blink {
+      0%, 60% { opacity: 1; }
+      61%, 100% { opacity: 0; }
     }
 
     .hero .tagline {
-      font-size: 1.25rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       max-width: 640px;
-      margin: 0.5rem auto 2rem;
-      font-weight: 400;
-      line-height: 1.7;
+      margin: 1rem auto 2rem;
+      line-height: 2.2;
     }
 
     .hero .tagline strong {
-      color: var(--fire-3);
-      font-weight: 700;
+      color: var(--yellow);
     }
 
     /* === INSTALL BAR === */
     .install-bar {
       display: inline-block;
-      background: linear-gradient(135deg, var(--code-bg), #1a0a30);
-      border: 2px solid;
-      border-image: linear-gradient(135deg, var(--fire-1), var(--lightning), var(--electric)) 1;
-      border-radius: 0;
-      padding: 0.8rem 2rem;
-      font-family: 'Orbitron', "SFMono-Regular", Consolas, monospace;
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--fire-3);
+      background: var(--dark-purple);
+      border: 4px solid var(--yellow);
+      box-shadow:
+        inset 0 0 0 2px var(--orange),
+        6px 6px 0 rgba(0, 0, 0, 0.4);
+      padding: 0.8rem 1.5rem;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.65rem;
+      color: var(--yellow);
       cursor: pointer;
-      position: relative;
-      transition: all 0.3s ease;
-      text-shadow: 0 0 10px var(--fire-3);
-      animation: installGlow 3s ease-in-out infinite;
+      transition: transform 0.1s steps(1);
     }
 
     .install-bar:hover {
-      background: linear-gradient(135deg, #1a0a30, #200a40);
-      transform: scale(1.05);
-      box-shadow: 0 0 30px var(--fire-1), 0 0 60px var(--electric), inset 0 0 20px rgba(255,107,0,0.1);
+      transform: translate(-2px, -2px);
+      box-shadow:
+        inset 0 0 0 2px var(--orange),
+        8px 8px 0 rgba(0, 0, 0, 0.4);
     }
 
-    @keyframes installGlow {
-      0%, 100% { box-shadow: 0 0 10px var(--fire-1), 0 0 20px rgba(255,69,0,0.3); }
-      50% { box-shadow: 0 0 20px var(--fire-2), 0 0 40px rgba(255,69,0,0.5), 0 0 60px rgba(0,212,255,0.2); }
+    .install-bar:active {
+      transform: translate(2px, 2px);
+      box-shadow:
+        inset 0 0 0 2px var(--orange),
+        2px 2px 0 rgba(0, 0, 0, 0.4);
     }
 
     .install-bar::before {
-      content: "⚡ $ ";
-      color: var(--lightning);
-    }
-
-    .install-bar::after {
-      content: " 🔥";
+      content: "> $ ";
+      color: var(--cyan);
     }
 
     .links {
       margin-top: 1.5rem;
-      font-size: 1rem;
+      font-size: 0.65rem;
     }
 
     .links a {
-      color: var(--lightning);
+      color: var(--cyan);
       text-decoration: none;
-      font-weight: 700;
-      font-family: 'Orbitron', monospace;
-      text-transform: uppercase;
-      font-size: 0.8rem;
-      letter-spacing: 0.15em;
-      transition: all 0.3s;
-      padding: 0.3rem 0.8rem;
-      border: 1px solid transparent;
+      letter-spacing: 0.1em;
+      padding: 0.3rem 0.6rem;
+      border: 2px solid transparent;
     }
 
     .links a:hover {
-      color: var(--fire-3);
-      text-shadow: 0 0 15px var(--fire-3);
-      border-color: var(--fire-2);
+      color: var(--yellow);
+      border-color: var(--yellow);
+    }
+
+    /* === DIVIDER === */
+    .pixel-divider {
+      height: 4px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--yellow) 0px, var(--yellow) 8px,
+        var(--orange) 8px, var(--orange) 16px,
+        var(--pink) 16px, var(--pink) 24px,
+        var(--cyan) 24px, var(--cyan) 32px
+      );
+      margin: 2rem 0;
+      image-rendering: pixelated;
     }
 
     /* === SECTION HEADERS === */
     h2 {
-      font-family: 'Orbitron', monospace;
-      font-size: 1.8rem;
-      font-weight: 900;
-      margin: 3.5rem 0 1.2rem;
-      padding-bottom: 0.6rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      background: linear-gradient(90deg, var(--fire-1), var(--fire-3), var(--lightning));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      position: relative;
-    }
-
-    h2::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0;
-      width: 100%;
-      height: 2px;
-      background: linear-gradient(90deg, var(--fire-1), var(--fire-3), var(--lightning), transparent);
-      animation: borderSlide 4s linear infinite;
-    }
-
-    @keyframes borderSlide {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
+      font-size: 1rem;
+      margin: 2.5rem 0 1rem;
+      padding: 0.6rem 1rem;
+      color: var(--dark-purple);
+      background: var(--yellow);
+      display: inline-block;
+      box-shadow: 4px 4px 0 var(--orange);
+      letter-spacing: 0.05em;
     }
 
     h3 {
-      font-family: 'Orbitron', monospace;
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin: 2rem 0 0.8rem;
-      color: var(--lightning);
-      text-transform: uppercase;
+      font-size: 0.75rem;
+      margin: 1.5rem 0 0.8rem;
+      color: var(--cyan);
       letter-spacing: 0.05em;
-      text-shadow: 0 0 10px rgba(0,212,255,0.4);
+    }
+
+    h3::before {
+      content: ">> ";
+      color: var(--pink);
     }
 
     /* === CODE BLOCKS === */
     pre {
-      background: linear-gradient(135deg, #0a0a25, #0d0d35, #0a0a25);
-      border: 1px solid var(--fire-1);
-      border-left: 4px solid;
-      border-image: linear-gradient(180deg, var(--fire-1), var(--lightning), var(--electric)) 1;
-      border-radius: 0;
+      background: var(--dark-purple);
+      border: 4px solid var(--purple);
+      box-shadow:
+        inset 0 0 0 2px #3a1878,
+        6px 6px 0 rgba(0, 0, 0, 0.3);
       padding: 1.2rem 1.5rem;
       overflow-x: auto;
       margin-bottom: 1.5rem;
-      font-size: 0.88rem;
-      line-height: 1.6;
-      position: relative;
-      box-shadow: 0 0 20px rgba(255,69,0,0.1), inset 0 0 30px rgba(0,0,0,0.3);
-    }
-
-    pre::before {
-      content: '>';
-      position: absolute;
-      top: 0.5rem; right: 0.8rem;
-      font-family: 'Orbitron', monospace;
-      font-size: 0.65rem;
-      color: var(--fire-2);
-      opacity: 0.5;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
+      font-size: 0.6rem;
+      line-height: 2.2;
     }
 
     code {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-family: 'Press Start 2P', monospace;
       color: var(--text);
     }
 
     p code, li code, td code {
-      background: linear-gradient(135deg, #1a0a30, #0d0d35);
-      border: 1px solid var(--fire-1);
-      border-radius: 0;
-      padding: 0.15em 0.5em;
-      font-size: 0.88em;
-      color: var(--fire-3);
+      background: var(--dark-purple);
+      border: 2px solid var(--purple);
+      padding: 0.15em 0.4em;
+      font-size: 0.65rem;
+      color: var(--pink);
     }
 
-    .comment { color: #666; font-style: italic; }
+    .comment { color: #6a5a8a; }
 
     p {
       margin-bottom: 1rem;
       color: var(--text);
-      font-size: 1.05rem;
+      font-size: 0.7rem;
+      line-height: 2.2;
     }
 
     a {
-      color: var(--lightning);
+      color: var(--cyan);
       text-decoration: none;
-      transition: all 0.3s;
     }
 
     a:hover {
-      text-decoration: none;
-      color: var(--fire-3);
-      text-shadow: 0 0 10px var(--fire-3);
+      color: var(--yellow);
     }
 
     ul, ol {
@@ -309,79 +273,56 @@
     }
 
     li {
-      margin-bottom: 0.4rem;
-      font-size: 1.05rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.7rem;
+      line-height: 2;
     }
 
     li::marker {
-      color: var(--fire-2);
+      color: var(--pink);
     }
 
     strong {
-      color: var(--fire-3);
-      font-weight: 700;
+      color: var(--yellow);
     }
 
     /* === FEATURE GRID === */
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 1rem;
       margin: 2rem 0;
     }
 
     .feature-card {
-      background: linear-gradient(135deg, #0a0a2e, #110a30);
-      border: 1px solid var(--fire-1);
-      border-radius: 0;
-      padding: 1.5rem;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.4s ease;
-      cursor: default;
-    }
-
-    .feature-card::before {
-      content: '';
-      position: absolute;
-      top: -50%; left: -50%;
-      width: 200%; height: 200%;
-      background: conic-gradient(from 0deg, transparent, var(--fire-1), transparent, var(--lightning), transparent);
-      animation: cardRotate 6s linear infinite;
-      opacity: 0;
-      transition: opacity 0.4s;
-    }
-
-    .feature-card:hover::before {
-      opacity: 0.1;
+      background: var(--window-bg);
+      border: 4px solid var(--window-border-outer);
+      box-shadow:
+        inset 0 0 0 3px var(--window-border-inner),
+        6px 6px 0 rgba(0, 0, 0, 0.4);
+      padding: 1.2rem;
+      transition: transform 0.1s steps(1);
     }
 
     .feature-card:hover {
-      border-color: var(--lightning);
-      transform: translateY(-4px) scale(1.02);
-      box-shadow: 0 10px 30px rgba(255,69,0,0.2), 0 0 40px rgba(0,212,255,0.1);
-    }
-
-    @keyframes cardRotate {
-      100% { transform: rotate(360deg); }
+      transform: translate(-2px, -2px);
+      box-shadow:
+        inset 0 0 0 3px var(--window-border-inner),
+        8px 8px 0 rgba(0, 0, 0, 0.4);
     }
 
     .feature-card h4 {
-      font-family: 'Orbitron', monospace;
-      font-size: 1rem;
-      margin-bottom: 0.5rem;
-      background: linear-gradient(90deg, var(--fire-2), var(--fire-4));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
+      font-size: 0.7rem;
+      margin-bottom: 0.6rem;
+      color: var(--yellow);
+      letter-spacing: 0.05em;
     }
 
     .feature-card p {
-      font-size: 0.9rem;
+      font-size: 0.6rem;
       color: var(--text-muted);
       margin-bottom: 0;
+      line-height: 2;
     }
 
     /* === PIPELINE === */
@@ -389,84 +330,67 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
+      gap: 0.3rem;
       margin: 2rem 0;
       flex-wrap: wrap;
     }
 
     .pipe-step {
-      background: linear-gradient(135deg, var(--surface), #150a30);
-      border: 2px solid var(--fire-1);
-      border-radius: 0;
-      padding: 0.6rem 1.4rem;
-      font-family: 'Orbitron', monospace;
-      font-weight: 700;
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--fire-3);
-      position: relative;
-      animation: stepPulse 3s ease-in-out infinite;
-    }
-
-    .pipe-step:nth-child(1) { animation-delay: 0s; }
-    .pipe-step:nth-child(3) { animation-delay: 0.5s; }
-    .pipe-step:nth-child(5) { animation-delay: 1s; }
-    .pipe-step:nth-child(7) { animation-delay: 1.5s; }
-
-    @keyframes stepPulse {
-      0%, 100% { box-shadow: 0 0 5px var(--fire-1); border-color: var(--fire-1); }
-      50% { box-shadow: 0 0 20px var(--fire-2), 0 0 40px rgba(255,69,0,0.3); border-color: var(--fire-3); }
+      background: var(--surface);
+      border: 3px solid var(--yellow);
+      padding: 0.5rem 1rem;
+      font-size: 0.6rem;
+      color: var(--yellow);
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
     }
 
     .pipe-arrow {
-      color: var(--lightning);
-      font-size: 1.5rem;
-      text-shadow: 0 0 10px var(--lightning);
-      animation: arrowPulse 1.5s ease-in-out infinite;
+      color: var(--pink);
+      font-size: 0.8rem;
+      animation: arrowBounce 1s steps(2) infinite;
     }
 
-    @keyframes arrowPulse {
-      0%, 100% { opacity: 0.5; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.2); }
+    @keyframes arrowBounce {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
     }
 
     /* === TABLE === */
     table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       margin-bottom: 1.5rem;
+      border: 4px solid var(--window-border-outer);
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.3);
     }
 
     th, td {
       text-align: left;
       padding: 0.8rem 1rem;
-      border: 1px solid var(--fire-1);
+      border: 2px solid var(--window-border-inner);
+      font-size: 0.6rem;
+      line-height: 2;
     }
 
     th {
-      background: linear-gradient(135deg, #1a0a30, #0d0d35);
-      font-family: 'Orbitron', monospace;
-      font-weight: 700;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--fire-3);
+      background: var(--surface);
+      color: var(--yellow);
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
     }
 
     td {
-      background: var(--code-bg);
-      font-size: 0.95rem;
+      background: var(--window-bg);
     }
 
     /* === BLOCKQUOTE === */
     blockquote {
-      border-left: 4px solid var(--lightning);
+      border-left: 6px solid var(--pink);
       padding: 0.8rem 1.2rem;
       margin-bottom: 1rem;
-      background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(191,0,255,0.05));
-      border-radius: 0;
-      box-shadow: 0 0 20px rgba(0,212,255,0.1);
+      background: var(--window-bg);
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
     }
 
     blockquote p {
@@ -481,95 +405,85 @@
     /* === FOOTER === */
     footer {
       text-align: center;
-      padding: 4rem 0 2rem;
-      color: var(--text-muted);
-      font-size: 1rem;
-      margin-top: 4rem;
-      position: relative;
+      padding: 3rem 0 2rem;
+      margin-top: 3rem;
     }
 
     footer::before {
       content: '';
-      position: absolute;
-      top: 0; left: 5%; right: 5%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--fire-1), var(--lightning), var(--fire-1), transparent);
+      display: block;
+      height: 4px;
+      margin-bottom: 2rem;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--yellow) 0px, var(--yellow) 8px,
+        var(--orange) 8px, var(--orange) 16px,
+        var(--pink) 16px, var(--pink) 24px,
+        var(--cyan) 24px, var(--cyan) 32px
+      );
     }
 
     footer p {
-      font-family: 'Orbitron', monospace;
-      font-weight: 900;
-      font-size: 1.3rem;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
-      background: linear-gradient(90deg, var(--fire-1), var(--fire-3), var(--lightning), var(--electric), var(--fire-1));
-      background-size: 200% auto;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      animation: footerShift 4s linear infinite;
+      font-size: 0.9rem;
+      color: var(--yellow);
+      letter-spacing: 0.15em;
+      animation: footerCycle 6s steps(1) infinite;
     }
 
-    @keyframes footerShift {
-      0% { background-position: 0% center; }
-      100% { background-position: 200% center; }
+    @keyframes footerCycle {
+      0% { color: var(--yellow); }
+      33% { color: var(--pink); }
+      66% { color: var(--cyan); }
     }
 
-    /* === FIRE PARTICLES (CSS) === */
-    .fire-particle {
-      position: fixed;
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 2;
-      animation: fireRise linear forwards;
+    /* === SPRITES / DECORATIONS === */
+    .sprite-row {
+      text-align: center;
+      font-size: 1.5rem;
+      letter-spacing: 0.5rem;
+      margin: 1rem 0;
+      animation: spriteWalk 2s steps(4) infinite;
     }
 
-    @keyframes fireRise {
-      0% { opacity: 1; transform: translateY(0) scale(1); }
-      100% { opacity: 0; transform: translateY(-100vh) scale(0); }
+    @keyframes spriteWalk {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(4px); }
+      50% { transform: translateX(0); }
+      75% { transform: translateX(-4px); }
+    }
+
+    /* === ACCENT GLOW (now pixel style) === */
+    .accent-glow {
+      color: var(--yellow);
+      background: var(--surface);
+      padding: 0 0.3em;
+      border: 2px solid var(--yellow);
     }
 
     /* === SCROLL REVEAL === */
-    .reveal {
+    .js .reveal {
       opacity: 0;
-      transform: translateY(30px);
-      transition: opacity 0.8s ease, transform 0.8s ease;
+      transform: translateY(16px);
+      transition: opacity 0.4s steps(4), transform 0.4s steps(4);
     }
 
-    .reveal.visible {
+    .js .reveal.visible {
       opacity: 1;
       transform: translateY(0);
     }
 
     /* === RESPONSIVE === */
     @media (max-width: 768px) {
-      .hero h1 { font-size: 2.8rem; }
-      .feature-grid { grid-template-columns: repeat(2, 1fr); }
-      h2 { font-size: 1.4rem; }
+      .hero h1 { font-size: 1.8rem; }
+      .feature-grid { grid-template-columns: 1fr; }
+      h2 { font-size: 0.8rem; }
+      .pipe { gap: 0.2rem; }
+      .pipe-step { font-size: 0.5rem; padding: 0.4rem 0.6rem; }
     }
 
     @media (max-width: 480px) {
-      .hero h1 { font-size: 2rem; }
-      .feature-grid { grid-template-columns: 1fr; }
-    }
-
-    /* === SCAN LINE OVERLAY === */
-    body::after {
-      content: '';
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0, 0, 0, 0.03) 2px,
-        rgba(0, 0, 0, 0.03) 4px
-      );
-      pointer-events: none;
-      z-index: 100;
+      .hero h1 { font-size: 1.3rem; }
+      .container { padding: 0 0.8rem 2rem; }
     }
 
     /* === PREFERS-REDUCED-MOTION === */
@@ -579,42 +493,31 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
       }
-      #starfield {
-        display: none;
-      }
-      .fire-particle {
-        display: none;
-      }
-      .reveal {
+      .js .reveal {
         opacity: 1;
         transform: none;
       }
     }
-
-    /* === GLOW ON AGENT MENTION === */
-    .accent-glow {
-      color: var(--fire-3);
-      font-weight: 700;
-      text-shadow: 0 0 8px var(--fire-3), 0 0 16px rgba(255,165,0,0.3);
-    }
   </style>
 </head>
 <body>
-  <canvas id="starfield"></canvas>
 
   <div class="container">
 
     <header class="hero">
+      <div class="sprite-row">~*~ ~*~ ~*~</div>
       <h1><span class="let-it">Let it </span><span class="dot">cook</span><span class="period">.</span></h1>
       <p class="tagline">
         Reviewing your coding agent's first pass is often a waste of your time. Cook puts your preferred agent in a <strong>"cook loop"</strong> and doesn't let it finish until it's actually done.
       </p>
-      <div class="install-bar" title="Click to copy" onclick="navigator.clipboard.writeText('npm install -g @let-it-cook/cli'); this.style.borderImage='linear-gradient(135deg, #00ff88, #00d4ff, #00ff88) 1'; setTimeout(()=>this.style.borderImage='linear-gradient(135deg, var(--fire-1), var(--lightning), var(--electric)) 1', 1500)">npm install -g @let-it-cook/cli</div>
+      <div class="install-bar" title="Click to copy" onclick="(function(el){try{if(navigator.clipboard){navigator.clipboard.writeText('npm install -g @let-it-cook/cli').then(function(){el.style.borderColor='var(--green)';el.style.color='var(--green)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}).catch(function(){el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)})}else{el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}}catch(e){}})(this)">npm install -g @let-it-cook/cli</div>
       <p class="links">
         <a href="https://github.com/rjcorwin/cook">GitHub</a> &middot;
         <a href="https://www.npmjs.com/package/@let-it-cook/cli">npm</a>
       </p>
     </header>
+
+    <div class="pixel-divider"></div>
 
     <section class="section reveal">
       <pre><code>cook "Implement dark mode" \                          <span class="comment"># work prompt</span>
@@ -629,19 +532,19 @@ cook "Implement dark mode" --agent codex</code></pre>
 
       <div class="feature-grid">
         <div class="feature-card">
-          <h4>⚡ Race</h4>
+          <h4>* Race</h4>
           <p>Run parallel cook loops in separate work trees, AI picks the best.</p>
         </div>
         <div class="feature-card">
-          <h4>🔥 Vs</h4>
+          <h4>* Vs</h4>
           <p>Explore multiple directions in separate work trees with different prompts.</p>
         </div>
         <div class="feature-card">
-          <h4>🚀 Ralph</h4>
+          <h4>* Ralph</h4>
           <p>Embed cook loops in ralph loops to work through a task list.</p>
         </div>
         <div class="feature-card">
-          <h4>💥 Composable</h4>
+          <h4>* Composable</h4>
           <p>Race, vs, and ralph compose freely for maximum flexibility.</p>
         </div>
       </div>
@@ -662,19 +565,19 @@ cook "Implement the next step in plan.md" ralph x3 "most complete"
 cook "Implement the next step in plan.md" x3 "most complete" ralph x3 "cleanest implementation wins"</code></pre>
     </section>
 
-    <h2 class="reveal">⚡ Cook Loop</h2>
+    <h2 class="reveal">* Cook Loop</h2>
     <section class="section reveal">
-      <p>The core loop runs <strong>work → review → gate → iterate</strong> until the gate says DONE or max iterations are reached (default: 3).</p>
+      <p>The core loop runs <strong>work -> review -> gate -> iterate</strong> until the gate says DONE or max iterations are reached (default: 3).</p>
 
       <div class="pipe">
-        <span class="pipe-step">🔨 work</span>
-        <span class="pipe-arrow">⚡→</span>
-        <span class="pipe-step">🔍 review</span>
-        <span class="pipe-arrow">⚡→</span>
-        <span class="pipe-step">🚦 gate</span>
-        <span class="pipe-arrow">⚡→</span>
-        <span class="pipe-step">🔥 iterate</span>
-        <span class="pipe-arrow">🔄</span>
+        <span class="pipe-step">work</span>
+        <span class="pipe-arrow">-></span>
+        <span class="pipe-step">review</span>
+        <span class="pipe-arrow">-></span>
+        <span class="pipe-step">gate</span>
+        <span class="pipe-arrow">-></span>
+        <span class="pipe-step">iterate</span>
+        <span class="pipe-arrow">&lt;&lt;</span>
       </div>
 
       <pre><code>cook "Add dark mode"                    <span class="comment"># all defaults</span>
@@ -695,7 +598,7 @@ cook "Add dark mode" --review "Review for accessibility" --iterate "Fix the a11y
   --review-agent claude --review-model opus</code></pre>
     </section>
 
-    <h2 class="reveal">🔥 Vs Mode</h2>
+    <h2 class="reveal">* Vs Mode</h2>
     <section class="section reveal">
       <p>Run different approaches in parallel git worktrees, then combine the results. Each branch gets its own full cook loop.</p>
 
@@ -721,7 +624,7 @@ cook "Add dark mode" --review "Review for accessibility" --iterate "Fix the a11y
   judge "best developer experience"</code></pre>
     </section>
 
-    <h2 class="reveal">🏁 Race Mode</h2>
+    <h2 class="reveal">* Race Mode</h2>
     <section class="section reveal">
       <p>Race N identical runs in parallel git worktrees, then let a judge pick the best:</p>
 
@@ -735,7 +638,7 @@ cook "Add dark mode" x3 "least code wins"           <span class="comment"># shor
       <p>Each run gets its own worktree branched from HEAD. After all runs complete, a judge agent reads every session log and responds with <code>PICK N</code>. The winning branch is merged into your current branch.</p>
     </section>
 
-    <h2 class="reveal">🚀 Ralph Loop</h2>
+    <h2 class="reveal">* Ralph Loop</h2>
     <section class="section reveal">
       <p>Ralph puts the cook loop inside an outer loop that advances through a task list. When the gate says <strong>NEXT</strong>, the iteration counter resets and work continues. When it says <strong>DONE</strong>, the loop exits.</p>
 
@@ -761,7 +664,7 @@ cook "Next task in plan.md" race 3 "cleanest" ralph 5
 cook "Next task in plan.md" ralph 5 race 3 "most complete"</code></pre>
     </section>
 
-    <h2 class="reveal">🛡️ Sandbox Modes</h2>
+    <h2 class="reveal">* Sandbox Modes</h2>
     <section class="section reveal">
       <p>Cook supports three sandbox modes via <code>--sandbox</code>:</p>
 
@@ -797,7 +700,7 @@ cook "Next task in plan.md" ralph 5 race 3 "most complete"</code></pre>
       </blockquote>
     </section>
 
-    <h2 class="reveal">⚙️ Configuration</h2>
+    <h2 class="reveal">* Configuration</h2>
     <section class="section reveal">
       <p>Run <code>cook init</code> in your project root to scaffold the configuration files:</p>
 
@@ -855,7 +758,7 @@ cook "Next task in plan.md" ralph 5 race 3 "most complete"</code></pre>
 }</code></pre>
     </section>
 
-    <h2 class="reveal">📜 COOK.md</h2>
+    <h2 class="reveal">* COOK.md</h2>
     <section class="section reveal">
       <p><code>COOK.md</code> lives in your project root and does two things: it holds project-level instructions for the agent, and it defines the template used to construct the prompt sent to the agent at each step.</p>
 
@@ -921,103 +824,14 @@ Read the session log for full context from previous steps.</code></pre>
     </section>
 
     <footer>
-      <p>⚡ Let it cook. 🔥</p>
+      <p>* Let it cook. *</p>
     </footer>
 
   </div>
 
   <script>
-    // === REDUCED MOTION CHECK ===
-    function prefersReducedMotion() {
-      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    }
-
-    // === STARFIELD ===
-    const starCanvas = document.getElementById('starfield');
-    const starCtx = starCanvas.getContext('2d');
-    let stars = [];
-
-    function resizeStarfield() {
-      starCanvas.width = window.innerWidth;
-      starCanvas.height = window.innerHeight;
-    }
-    resizeStarfield();
-    window.addEventListener('resize', resizeStarfield);
-
-    for (let i = 0; i < 300; i++) {
-      stars.push({
-        x: Math.random() * starCanvas.width,
-        y: Math.random() * starCanvas.height,
-        size: Math.random() * 2 + 0.5,
-        speed: Math.random() * 0.5 + 0.1,
-        brightness: Math.random(),
-        color: Math.random() > 0.7 ? `hsl(${Math.random() * 60 + 200}, 80%, 70%)` : '#fff'
-      });
-    }
-
-    function drawStars() {
-      if (prefersReducedMotion()) return;
-      starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
-      const time = Date.now() * 0.001;
-      stars.forEach(star => {
-        const twinkle = 0.5 + 0.5 * Math.sin(time * star.speed * 3 + star.x);
-        starCtx.globalAlpha = twinkle * star.brightness;
-        starCtx.fillStyle = star.color;
-        starCtx.beginPath();
-        starCtx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-        starCtx.fill();
-
-        // Occasional shooting star effect
-        if (star.brightness > 0.95) {
-          starCtx.globalAlpha = twinkle * 0.3;
-          starCtx.strokeStyle = star.color;
-          starCtx.lineWidth = 0.5;
-          starCtx.beginPath();
-          starCtx.moveTo(star.x, star.y);
-          starCtx.lineTo(star.x - star.size * 4, star.y + star.size * 2);
-          starCtx.stroke();
-        }
-      });
-      requestAnimationFrame(drawStars);
-    }
-    drawStars();
-
-    // === FIRE PARTICLES ===
-    const MAX_FIRE_PARTICLES = 30;
-    let activeFireParticles = 0;
-    let fireInterval;
-
-    function spawnFireParticle() {
-      if (activeFireParticles >= MAX_FIRE_PARTICLES) return;
-      if (prefersReducedMotion()) return;
-
-      const particle = document.createElement('div');
-      particle.className = 'fire-particle';
-      const x = Math.random() * window.innerWidth;
-      const colors = ['#ff4500', '#ff6b00', '#ffa500', '#ffdd00', '#00d4ff', '#bf00ff'];
-      particle.style.background = colors[Math.floor(Math.random() * colors.length)];
-      particle.style.left = x + 'px';
-      particle.style.bottom = '0px';
-      particle.style.width = (2 + Math.random() * 4) + 'px';
-      particle.style.height = particle.style.width;
-      particle.style.animationDuration = (3 + Math.random() * 5) + 's';
-      particle.style.boxShadow = `0 0 ${6 + Math.random() * 10}px ${particle.style.background}`;
-      document.body.appendChild(particle);
-      activeFireParticles++;
-
-      const duration = parseFloat(particle.style.animationDuration) * 1000;
-      setTimeout(() => { particle.remove(); activeFireParticles--; }, duration);
-    }
-
-    fireInterval = setInterval(spawnFireParticle, 200);
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clearInterval(fireInterval);
-      } else {
-        fireInterval = setInterval(spawnFireParticle, 200);
-      }
-    });
+    // Enable reveal animations only when JS is available
+    document.documentElement.classList.add('js');
 
     // === SCROLL REVEAL ===
     const observer = new IntersectionObserver((entries) => {
@@ -1030,43 +844,18 @@ Read the session log for full context from previous steps.</code></pre>
 
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-    // === CURSOR TRAIL ===
-    document.addEventListener('mousemove', (e) => {
-      if (prefersReducedMotion()) return;
-      if (Math.random() > 0.7) return;
-      const spark = document.createElement('div');
-      spark.style.cssText = `
-        position: fixed;
-        width: 3px; height: 3px;
-        background: ${Math.random() > 0.5 ? '#ff6b00' : '#00d4ff'};
-        border-radius: 50%;
-        pointer-events: none;
-        z-index: 9999;
-        left: ${e.clientX}px;
-        top: ${e.clientY}px;
-        box-shadow: 0 0 6px ${Math.random() > 0.5 ? '#ff6b00' : '#00d4ff'};
-        transition: all 0.8s ease;
-      `;
-      document.body.appendChild(spark);
-      requestAnimationFrame(() => {
-        spark.style.opacity = '0';
-        spark.style.transform = `translate(${(Math.random()-0.5)*40}px, ${(Math.random()-0.5)*40}px) scale(0)`;
-      });
-      setTimeout(() => spark.remove(), 800);
-    });
-
     // === TITLE ANIMATION ===
     const titles = [
-      'cook — Let it cook. 🔥⚡🚀',
-      'cook — SENDING IT 🚀🚀🚀',
-      'cook — TO THE MOON ⚡🌙⚡',
-      'cook — AND BACK 🔥💥🔥',
+      'cook - Let it cook.',
+      'cook - SMAAAASH!!',
+      'cook - You won!',
+      'cook - HP restored!',
     ];
     let titleIdx = 0;
     setInterval(() => {
       titleIdx = (titleIdx + 1) % titles.length;
       document.title = titles[titleIdx];
-    }, 3000);
+    }, 4000);
   </script>
 </body>
 </html>
