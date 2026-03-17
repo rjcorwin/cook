@@ -19,13 +19,13 @@ Cook is built from three categories of operators:
 Operators compose left to right by position:
 
 ```
-cook "<work>" [xN] [review ["<review>"] ["<gate>"] ["<iterate>"] [max-iterations]] \
+cook "<work>" [xN | repeat N] [review ["<review>"] ["<gate>"] ["<iterate>"] [max-iterations]] \
      [ralph [N] "<ralph-gate>"] \
      [vN | race N | vs ... ] [resolver] ["<criteria>"] \
      [vN | race N] [resolver] ["<criteria>"]
 ```
 
-**Reserved keywords**: `review`, `ralph`, `race`, `vs`, `pick`, `merge`, `compare`. The patterns `xN` and `vN` (where N is a digit) are also reserved. A bare number is `max-iterations`. Any other string fills the next prompt slot.
+**Reserved keywords**: `review`, `ralph`, `race`, `repeat`, `vs`, `pick`, `merge`, `compare`. The patterns `xN` and `vN` (where N is a digit) are also reserved. `xN` is shorthand for `repeat N`; `vN` is shorthand for `race N`. A bare number is `max-iterations`. Any other string fills the next prompt slot.
 
 ---
 
@@ -41,12 +41,13 @@ That's it — one agent call, done.
 
 ---
 
-## xN (repeat)
+## xN / repeat N (repeat)
 
-`xN` repeats everything to its left N times sequentially. Each pass sees the output of the previous pass, allowing the agent to refine its own work. Position determines what gets repeated — `xN` wraps leftward:
+`xN` (shorthand for `repeat N`) repeats everything to its left N times sequentially. Each pass sees the output of the previous pass, allowing the agent to refine its own work. Position determines what gets repeated — `xN` wraps leftward:
 
 ```sh
 cook "Implement dark mode" x3
+cook "Implement dark mode" repeat 3    # equivalent
 ```
 
 ```
@@ -140,7 +141,7 @@ Ralph wraps a cook with an outer gate. After the cook completes (either a single
 cook "<work>" [xN] [review ...] ralph [N] "<ralph-gate>"
 ```
 
-The ralph gate prompt is required. `N` sets the max number of tasks (default: 3).
+The ralph gate prompt is required. `N` sets the max number of tasks (default: 100).
 
 ### Ralph without review
 

@@ -49,7 +49,7 @@ The spec (SPEC.md) was written as the canonical definition of how cook should wo
 
 10. ~~**MAX_ITERATIONS behavior in ralph.**~~ **Resolved: stop with default of 100.** When the inner review loop hits max iterations without DONE, ralph stops entirely (does not advance to next task). If the inner loop can't converge, blindly advancing is dangerous. A warning is logged. Default ralph max tasks is 100.
 
-11. ~~**Inline-next (`-n`/`--next`) from z4h research — in scope?**~~ **Resolved: deferred.** This is a convenience shortcut that lets the inner gate return NEXT (advance to next task) without the full ralph outer loop. Not core to the grammar — ship without it, add later if demand emerges.
+11. ~~**Inline-next (`-n`/`--next`) from z4h research — in scope?**~~ **Resolved: not needed.** Removed from scope entirely.
 
 ## System Architecture
 
@@ -76,40 +76,7 @@ cook "<work>" [xN] [review ["<review>"] ["<gate>"] ["<iterate>"] [max-iterations
      [vN | race N] [resolver] ["<criteria>"]
 ```
 
-This is a pipeline of operators applied left to right. The natural representation is an AST:
-
-```
-CookAST = {
-  work: string
-  repeat?: number                    // xN before review
-  review?: {
-    reviewPrompt?: string
-    gatePrompt?: string
-    iteratePrompt?: string
-    maxIterations?: number
-  }
-  repeatOuter?: number               // xN after review (wraps review)
-  ralph?: {
-    maxTasks?: number
-    gatePrompt: string
-  }
-  composition?: {
-    type: 'race' | 'vs'
-    count?: number                   // for race/vN
-    branches?: CookAST[]            // for vs
-    resolver: 'pick' | 'merge' | 'compare'
-    criteria?: string
-  }
-  secondComposition?: {             // after resolver
-    type: 'race'
-    count: number
-    resolver: 'pick' | 'merge' | 'compare'
-    criteria?: string
-  }
-}
-```
-
-But `xN` nesting (`cook "work" x3 review x3`) makes a flat struct insufficient. The spec's leftward-wrapping rule means each `xN` creates a new repeat layer around everything before it. This is better modeled as:
+This is a pipeline of operators applied left to right. The `xN` leftward-wrapping rule (`cook "work" x3 review x3`) means each operator creates a new layer around everything before it. The natural representation is a recursive AST:
 
 ```
 Node = Work(prompt)
