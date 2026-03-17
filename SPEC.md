@@ -19,11 +19,13 @@ Cook is built from three categories of operators:
 Operators compose left to right by position:
 
 ```
-cook "<work>" [xN] [review ["<r>"] ["<g>"] ["<i>"] [max-iterations]] \
+cook "<work>" [xN] [review ["<review>"] ["<gate>"] ["<iterate>"] [max-iterations]] \
      [ralph [N] "<ralph-gate>"] \
      [vN | race N | vs ... ] [resolver] ["<criteria>"] \
      [vN | race N] [resolver] ["<criteria>"]
 ```
+
+**Reserved keywords**: `review`, `ralph`, `race`, `vs`, `pick`, `merge`, `compare`. The patterns `xN` and `vN` (where N is a digit) are also reserved. A bare number is `max-iterations`. Any other string fills the next prompt slot.
 
 ---
 
@@ -106,7 +108,7 @@ When review/gate/iterate prompts are given as positional args right after work (
 cook "<work>" "<review>" "<gate>" ["<iterate>"] [max-iterations]
 ```
 
-Duck-typed: a bare number is `max-iterations`; any other string fills the next prompt slot.
+Duck-typed: a bare number is `max-iterations`; any other quoted string fills the next prompt slot. Reserved keywords terminate the positional scan.
 
 ```sh
 # Shorthand — positional prompts imply review loop
