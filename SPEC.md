@@ -7,19 +7,22 @@ Cook is built from three categories of operators:
 **Work** — the core unit: a single LLM call that does work.
 
 **Loop operators** wrap work with iteration:
-- **review** — adds a review→gate loop around work, iterating until quality passes
+- **xN** (repeat) — run work N times sequentially, each pass refining the last
+- **review** — adds a review→gate loop, iterating until quality passes
 - **Ralph** — adds an outer gate for sequential task progression
 
 **Composition operators** run multiple cooks in parallel and resolve them:
-- **race** — N identical cooks in parallel worktrees
+- **vN** (versions) / **race N** — N identical cooks in parallel worktrees
 - **vs** — 2+ different cooks in parallel worktrees
 - **resolvers** (`pick`, `merge`, `compare`) — determine the outcome of a composition
 
+Operators compose left to right by position:
+
 ```
-cook "<work>" [review ["<r>"] ["<g>"] ["<i>"] [max-iterations]] \
+cook "<work>" [xN] [review ["<r>"] ["<g>"] ["<i>"] [max-iterations]] \
      [ralph [N] "<ralph-gate>"] \
-     [race N | vs ... ] [resolver] ["<criteria>"] \
-     [race N] [resolver] ["<criteria>"]
+     [vN | race N | vs ... ] [resolver] ["<criteria>"] \
+     [vN | race N] [resolver] ["<criteria>"]
 ```
 
 ---
@@ -33,6 +36,45 @@ cook "Implement dark mode"
 ```
 
 That's it — one agent call, done.
+
+---
+
+## xN (repeat)
+
+`xN` runs work N times sequentially. Each pass sees the output of the previous pass, allowing the agent to refine its own work without the overhead of a separate review/gate cycle.
+
+```sh
+cook "Implement dark mode" x3
+```
+
+```
+Pass 1: work
+Pass 2: work (sees pass 1 output)
+Pass 3: work (sees pass 2 output)
+```
+
+Position relative to `review` matters:
+
+```sh
+cook "work" x3 review          # 3 work passes, then review loop
+cook "work" review x3          # review loop repeated 3 times
+cook "work" x3 review x3       # 3 work passes → review loop, all repeated 3 times
+```
+
+```
+cook "work" x3 review:
+  work → work → work → review → gate → (iterate if needed)
+
+cook "work" review x3:
+  Round 1: work → review → gate (until DONE)
+  Round 2: work → review → gate (until DONE)
+  Round 3: work → review → gate (until DONE)
+
+cook "work" x3 review x3:
+  Round 1: work×3 → review loop
+  Round 2: work×3 → review loop
+  Round 3: work×3 → review loop
+```
 
 ---
 
@@ -80,10 +122,10 @@ When the `review` keyword is used with no prompts, defaults are applied:
 
 ## Ralph
 
-Ralph wraps a cook with an outer gate. After the cook completes (either a single work call or after review says DONE), the ralph gate decides NEXT or DONE. The work prompt is self-directing — it reads project state to pick the next task on each ralph iteration.
+Ralph wraps a cook with an outer gate. After the cook completes (either a single work call, repeats, or after review says DONE), the ralph gate decides NEXT or DONE. The work prompt is self-directing — it reads project state to pick the next task on each ralph iteration.
 
 ```sh
-cook "<work>" [review ...] ralph [N] "<ralph-gate>"
+cook "<work>" [xN] [review ...] ralph [N] "<ralph-gate>"
 ```
 
 The ralph gate prompt is required. `N` sets the max number of tasks (default: 3).
@@ -101,6 +143,22 @@ Task 1:  work → ralph gate (NEXT)
 Task 2:  work → ralph gate (NEXT)
 ...
 Task N:  work → ralph gate (DONE) → exit
+```
+
+### Ralph with repeat
+
+```sh
+cook "Read plan.md, do the next incomplete task" \
+     x3 \
+     ralph 5 \
+     "If all tasks in plan.md are [done] say DONE, else say NEXT"
+```
+
+```
+Task 1:  work×3 → ralph gate (NEXT)
+Task 2:  work×3 → ralph gate (NEXT)
+...
+Task N:  work×3 → ralph gate (DONE) → exit
 ```
 
 ### Ralph with review
@@ -138,31 +196,37 @@ cook "Read plan.md, do the next incomplete task" \
 
 ---
 
-## race
+## vN / race N (versions)
 
-Race runs N identical cooks in parallel worktrees, then resolves with a resolver.
+Versions runs N identical cooks in parallel worktrees, then resolves with a resolver. `vN` is shorthand for `race N`.
 
 ```sh
-cook "<work>" [review ...] [ralph ...] race N [resolver]
-cook "<work>" [review ...] [ralph ...] xN [resolver]     # shorthand
+cook "<work>" [xN] [review ...] [ralph ...] race N [resolver]
+cook "<work>" [xN] [review ...] [ralph ...] vN [resolver]       # shorthand
 ```
 
 ```sh
 cook "Implement dark mode" race 3 pick "least lines changed"
-cook "Implement dark mode" x3 pick "least lines changed"
-cook "Implement dark mode" x3                               # pick is the default resolver
+cook "Implement dark mode" v3 pick "least lines changed"
+cook "Implement dark mode" v3                                    # pick is the default resolver
 ```
 
-Race with review:
+Versions with review:
 
 ```sh
-cook "Implement dark mode" review race 3 pick "least lines changed"
+cook "Implement dark mode" review v3 pick "least lines changed"
 ```
 
-Ralph composes with race:
+Versions with repeat:
 
 ```sh
-cook "Read plan.md and implement the next task" ralph 5 "DONE if plan complete, else NEXT" race 3 pick "cleanest result"
+cook "Implement dark mode" x3 v3 pick "least lines changed"     # 3 versions, each gets 3 passes
+```
+
+Ralph composes with versions:
+
+```sh
+cook "Read plan.md and implement the next task" ralph 5 "DONE if plan complete, else NEXT" v3 pick "cleanest result"
 ```
 
 ---
@@ -175,7 +239,7 @@ cook "Read plan.md and implement the next task" ralph 5 "DONE if plan complete, 
 cook "<cook-A>" vs "<cook-B>" [vs "<cook-C>" ...] [resolver]
 ```
 
-Each branch is a full cook definition — work prompt, optionally with review and/or ralph:
+Each branch is a full cook definition — work prompt, optionally with xN, review, and/or ralph:
 
 ```sh
 cook "Implement auth with JWT" vs "Implement auth with sessions" pick "best security and simplicity"
@@ -201,7 +265,7 @@ cook "Read plan.md and implement the next task" ralph 5 "DONE if plan complete, 
 
 ## Resolvers
 
-Resolvers determine the outcome of a composition (`race` or `vs`).
+Resolvers determine the outcome of a composition (`vN`, `race N`, or `vs`).
 
 | Resolver | Behavior |
 |----------|----------|
@@ -215,17 +279,17 @@ Resolvers determine the outcome of a composition (`race` or `vs`).
 cook "Approach A" vs "Approach B" pick "fewest lines changed"
 cook "Approach A" vs "Approach B" merge "cleanest implementation"
 cook "Approach A" vs "Approach B" compare
-cook "Approach A" x3                        # pick with no criteria
+cook "Approach A" v3                        # pick with no criteria
 ```
 
 ---
 
 ## Second-level composition
 
-After a resolver, the result can be raced again with `race N`:
+After a resolver, the result can be versioned again with `vN` or `race N`:
 
 ```sh
-cook "A" vs "B" pick "cleanest" race 3 pick "most thorough"
+cook "A" vs "B" pick "cleanest" v3 pick "most thorough"
 ```
 
 This runs 3 independent vs instances, then picks the best of the 3 winners.
