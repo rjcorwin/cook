@@ -31,7 +31,7 @@ The spec (SPEC.md) was written as the canonical definition of how cook should wo
 
 ### Open Questions
 
-1. **Rename or alias `judge`→`pick`, `summarize`→`compare`?** The spec uses `pick`/`merge`/`compare`. The implementation uses `judge`/`merge`/`summarize`. Should we hard-cut to new names, or keep old names as aliases for backwards compatibility? The codebase is pre-1.0 and the old names aren't documented externally — a hard cut seems fine.
+1. ~~**Rename or alias `judge`→`pick`, `summarize`→`compare`?**~~ **Resolved: hard cut.** `judge`→`pick`, `summarize`→`compare`, no aliases. This ships as a major version so no backwards compat concern.
 
 2. ~~**Should `review` keyword with no prompts imply the review loop, or should bare `cook "work"` also run review?**~~ **Resolved: yes, skip review.** `cook "work"` is a single sandboxed LLM call — no review loop. This makes bare cook valuable as a simple way to run a prompt in the configured sandbox (especially useful with docker). `cook "work" review` explicitly opts into the review loop.
 
