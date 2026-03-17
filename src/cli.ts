@@ -8,7 +8,7 @@ import { loadConfig, type AgentName, type CookConfig, type StepName, type StepSe
 import type { SandboxMode } from './runner.js'
 import { DEFAULT_COOK_MD, loadCookMD } from './template.js'
 import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET } from './log.js'
-import { parse, type ParsedFlags } from './parser.js'
+import { parse, separateFlags, buildParsedFlags, type ParsedFlags } from './parser.js'
 import { execute, cleanupActiveExecutions, type ExecutionContext } from './executor.js'
 
 const DEFAULT_COOK_CONFIG_JSON = `{
@@ -300,20 +300,17 @@ async function cmdDoctor(args: string[]): Promise<void> {
   const projectRoot = findProjectRoot()
   const config = loadConfig(projectRoot)
 
-  // Parse just flags for doctor — use a dummy work prompt to avoid parse error
-  let parsedFlags: ParsedFlags
-  try {
-    const result = parse(args.length > 0 ? args : ['_doctor_check_'])
-    parsedFlags = result.flags
-  } catch {
-    parsedFlags = { showRequest: true }
-  }
+  // Parse just flags for doctor — extract flags directly without requiring a work prompt
+  const { flags } = separateFlags(args)
+  const parsedFlags = buildParsedFlags(flags)
   const plan = resolveAgentPlan(parsedFlags, config)
 
   logStep(`Default: ${plan.defaultAgent}:${plan.defaultModel}`)
   logStep(`Work: ${plan.stepConfig.work.agent}:${plan.stepConfig.work.model}`)
   logStep(`Review: ${plan.stepConfig.review.agent}:${plan.stepConfig.review.model}`)
   logStep(`Gate: ${plan.stepConfig.gate.agent}:${plan.stepConfig.gate.model}`)
+  logStep(`Iterate: ${plan.stepConfig.iterate.agent}:${plan.stepConfig.iterate.model}`)
+  logStep(`Ralph: ${plan.stepConfig.ralph.agent}:${plan.stepConfig.ralph.model}`)
 
   let allGood = true
   const usedModes = new Set(ALL_STEP_NAMES.map(step => plan.stepConfig[step].sandbox))

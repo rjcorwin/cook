@@ -20,6 +20,8 @@ export interface LoopConfig {
   projectRoot: string
   // Seed lastMessage with output from a compound inner node (e.g., repeat before review)
   initialLastMessage?: string
+  // Skip the work step on iteration 1 (used when inner node already ran the work)
+  skipFirstWork?: boolean
   // Extra template context passed through from executor
   ralphIteration?: number
   maxRalph?: number
@@ -60,16 +62,21 @@ export async function agentLoop(
   let lastMessage = config.initialLastMessage ?? ''
 
   for (let i = 1; i <= config.maxIterations; i++) {
-    // Iteration 1: work → review → gate
+    // Iteration 1: work → review → gate (or just review → gate if skipFirstWork)
     // Iteration 2+: iterate (or work) → review → gate
     const workStepName: StepName = (i > 1 && config.iteratePrompt) ? 'iterate' : 'work'
     const workPrompt = (i > 1 && config.iteratePrompt) ? config.iteratePrompt : config.workPrompt
 
-    const steps: { name: StepName; prompt: string }[] = [
-      { name: workStepName, prompt: workPrompt },
-      { name: 'review', prompt: config.reviewPrompt },
-      { name: 'gate', prompt: config.gatePrompt },
-    ]
+    const steps: { name: StepName; prompt: string }[] = (i === 1 && config.skipFirstWork)
+      ? [
+          { name: 'review', prompt: config.reviewPrompt },
+          { name: 'gate', prompt: config.gatePrompt },
+        ]
+      : [
+          { name: workStepName, prompt: workPrompt },
+          { name: 'review', prompt: config.reviewPrompt },
+          { name: 'gate', prompt: config.gatePrompt },
+        ]
 
     for (const step of steps) {
       const stepConfig = config.steps[step.name]

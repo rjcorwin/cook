@@ -63,7 +63,7 @@ const VALUE_FLAGS = new Set([
 ])
 const BOOLEAN_FLAGS = new Set(['--hide-request'])
 
-function separateFlags(args: string[]): { flags: Record<string, string>; positional: string[] } {
+export function separateFlags(args: string[]): { flags: Record<string, string>; positional: string[] } {
   const flags: Record<string, string> = {}
   const positional: string[] = []
 
@@ -91,7 +91,7 @@ function separateFlags(args: string[]): { flags: Record<string, string>; positio
   return { flags, positional }
 }
 
-function buildParsedFlags(flags: Record<string, string>): ParsedFlags {
+export function buildParsedFlags(flags: Record<string, string>): ParsedFlags {
   const sandboxFlag = flags['--sandbox']
   const sandbox = (sandboxFlag === 'agent' || sandboxFlag === 'docker' || sandboxFlag === 'none') ? sandboxFlag : undefined
 
@@ -136,7 +136,7 @@ function parsePipeline(tokens: string[], parsedFlags: ParsedFlags): Node {
     throw new Error(`Work prompt is required (got reserved keyword "${tokens[0]}")`)
   }
 
-  let current: Node = { type: 'work', prompt: tokens[0] }
+  let current: Node = { type: 'work', prompt: parsedFlags.work ?? tokens[0] }
   i = 1
 
   // Scan for implicit review mode: bare strings/numbers after work that aren't keywords

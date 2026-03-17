@@ -224,6 +224,7 @@ async function executeReview(
         maxIterations: node.maxIterations,
         projectRoot: ctx.projectRoot,
         initialLastMessage: innerResult.lastMessage,
+        skipFirstWork: true,
         ralphIteration: ctx.ralphIteration,
         maxRalph: ctx.maxRalph,
         repeatPass: ctx.repeatPass,
@@ -606,6 +607,7 @@ async function executeBranchForComposition(
         maxIterations: node.maxIterations,
         projectRoot: ctx.projectRoot,
         initialLastMessage: ctx.lastMessage,
+        skipFirstWork: node.inner.type !== 'work',
         ralphIteration: ctx.ralphIteration,
         maxRalph: ctx.maxRalph,
         repeatPass: ctx.repeatPass,
@@ -666,7 +668,9 @@ async function executeBranchForComposition(
         })
 
         const runner = await pool.get(ralphStepConfig.sandbox)
-        const output = await runner.runAgent(ralphStepConfig.agent, ralphStepConfig.model, prompt, () => {})
+        const output = await runner.runAgent(ralphStepConfig.agent, ralphStepConfig.model, prompt, (line) => {
+          console.error(`  ${line}`)
+        })
 
         const verdict = parseRalphVerdict(output)
         if (verdict === 'DONE') {
@@ -981,6 +985,9 @@ async function applyAndCleanup(
     } catch (err) {
       logWarn(`Merge failed: ${err instanceof Error ? err.message : String(err)}`)
       logStep(`  cd ${projectRoot} && git status`)
+      for (const r of results) {
+        logStep(`  Run ${r.index}: ${r.branchName} @ ${r.worktreePath}`)
+      }
       return
     }
     await cleanupWorktrees(projectRoot, results, session)
