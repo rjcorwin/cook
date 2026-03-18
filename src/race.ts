@@ -115,9 +115,14 @@ export function parseJudgeVerdict(output: string, maxRun: number): number | null
 export function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
+    let answered = false
     rl.question(question, answer => {
+      answered = true
       rl.close()
       resolve(answer.trim().toLowerCase() !== 'n')
+    })
+    rl.on('close', () => {
+      if (!answered) resolve(true) // auto-accept on EOF (non-TTY)
     })
   })
 }
@@ -125,10 +130,15 @@ export function confirm(question: string): Promise<boolean> {
 export function pickOne(question: string, count: number): Promise<number | null> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
+    let answered = false
     rl.question(question, answer => {
+      answered = true
       rl.close()
       const n = parseInt(answer.trim(), 10)
       resolve(!isNaN(n) && n >= 1 && n <= count ? n : null)
+    })
+    rl.on('close', () => {
+      if (!answered) resolve(null) // no selection on EOF (non-TTY)
     })
   })
 }
