@@ -9,7 +9,8 @@
     "node": ">=20"
   },
   "files": [
-    "dist"
+    "dist",
+    "skill"
   ],
   "scripts": {
     "build": "rm -rf dist && tsup"

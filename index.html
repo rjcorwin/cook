@@ -896,6 +896,19 @@ Read the session log for full context from previous steps.</code></pre>
       <p>Edit the <code>## Project Instructions</code> section to give the agent context about your project. Backticks and bare <code>$</code> are escaped automatically — write <code>\${...}</code> to emit a literal <code>${...}</code>.</p>
     </section>
 
+    <h2 class="reveal">* Claude Code Skill</h2>
+    <section class="section reveal">
+      <p>Give your Claude Code agent the <code>/cook</code> skill so it can orchestrate its own subagent workflows:</p>
+
+      <pre><code><span class="comment"># Copy the skill into your project</span>
+mkdir -p .claude/skills
+cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook</code></pre>
+
+      <p>Then use <code>/cook "your prompt" [operators...]</code> in Claude Code — or let the agent invoke it autonomously when iterative refinement, parallel races, or task-list progression would help.</p>
+
+      <p>The skill teaches your agent how to construct <code>cook</code> commands using all the primitives: review loops, repeat passes, composition operators, and ralph task lists.</p>
+    </section>
+
     <footer>
       <p>* Let it cook. *</p>
     </footer>

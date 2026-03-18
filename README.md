@@ -56,6 +56,21 @@ cook "Implement dark mode" review v3 "cleanest result"
 npm install -g @let-it-cook/cli
 ```
 
+### As a Claude Code skill
+
+Give your Claude Code agent the `/cook` skill so it can orchestrate its own subagent workflows:
+
+```sh
+# Copy the skill into your project
+mkdir -p .claude/skills
+cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook
+
+# Or if you cloned the repo
+cp -r /path/to/cook/skill .claude/skills/cook
+```
+
+Then in Claude Code, use `/cook "your prompt" [operators...]` — or let the agent invoke it autonomously when it makes sense.
+
 ## Primitives
 
 Cook is built from three categories of operators:
