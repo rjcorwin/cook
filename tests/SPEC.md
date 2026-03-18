@@ -4,7 +4,7 @@ Uses a fresh todo app as the test subject. Each test uses its own isolated direc
 
 > **Local build:** If testing a local build, replace `cook` with `node /path/to/cook/dist/cli.js`, or run `npm link` first from the cook project root.
 >
-> **Parallel runs:** Tests modify shared files (`index.html`, `PLAN.md`). If running sections in parallel (e.g. delegating to multiple agents), use separate directories: `../todo-loops`, `../todo-ralph`, `../todo-composition`, etc. Set each up with the full Setup block below.
+> **Parallel runs:** Tests modify shared files (`index.html`, `PLAN.md`). If running sections in parallel (e.g. delegating to multiple agents), use separate directories: `../todo-loops`, `../todo-ralph`, `../todo-composition`, etc. Set each up with the full Setup block below. **Warning:** Running more than 2 cook processes concurrently from a coding agent can cause EIO errors that break the session — see README.md for details. Sequential execution is recommended.
 
 ## Setup
 

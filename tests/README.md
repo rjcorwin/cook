@@ -49,11 +49,11 @@ tests/
 
 Each test **must** use its own directory. Tests modify shared files (`index.html`, `PLAN.md`) and will interfere if run in the same directory.
 
-Use a descriptive name per test:
+Use a descriptive name per test, as siblings of the cook project directory (not under `/tmp`):
 ```sh
-/path/to/todo-review-x3
-/path/to/todo-flags
-/path/to/todo-vs-merge
+../todo-review-x3
+../todo-flags
+../todo-vs-merge
 ```
 
 ### Run folders
@@ -120,9 +120,13 @@ If you are an AI coding agent tasked with running these tests:
 
 6. **Set up each test in its own directory** using the setup block above.
 
-7. **Run tests in priority order** (SPEC.md lists them in order). Tests can be parallelized across separate directories if the agent supports concurrent execution.
+7. **Run tests sequentially, not in parallel.** Cook spawns Claude Code as a subprocess, and multiple concurrent cook processes share the same `/tmp/claude-1000/` directory tree. When one subprocess cleans up, it can corrupt the task output files that other processes (including the outer agent session) depend on, causing persistent `EIO` errors that break the bash tool for the rest of the session. Run one test at a time to avoid this.
 
-8. **Record results in `$RUN_DIR/RESULTS.md`** using this format:
+   If parallelism is desired, limit to 2 concurrent tests and monitor for EIO errors. If EIO occurs, the session is unrecoverable — record partial results and start a fresh session.
+
+8. **Use project-local test directories, not `/tmp`.** Place test directories under the project or as siblings (e.g., `../todo-work`, `../todo-review`), not under `/tmp`. The `/tmp/claude-1000/` path is shared infrastructure for the agent's bash tool — cook subprocesses running there create conflicts.
+
+9. **Record results in `$RUN_DIR/RESULTS.md`** using this format:
 
    ```markdown
    # Test Results
@@ -151,9 +155,11 @@ If you are an AI coding agent tasked with running these tests:
    | ... | ... | ... | ... |
    ```
 
-9. **Update `ISSUES.md`** if new bugs are found. Check for duplicates first.
+10. **Update `ISSUES.md`** if new bugs are found. Check for duplicates first.
 
-10. **Interactive prompts:** Some composition tests (`vs + merge`, `vN + pick`) show interactive prompts (`Apply Run N? [Y/n]`, `Remove worktrees? [Y/n]`). In non-TTY environments these default to Y (auto-accept).
+11. **Interactive prompts:** Some composition tests (`vs + merge`, `vN + pick`) show interactive prompts (`Apply Run N? [Y/n]`, `Remove worktrees? [Y/n]`). In non-TTY environments these should default to Y (auto-accept). **Known issue:** The `confirm()` function in `race.ts` doesn't handle EOF correctly — see ISSUES.md.
+
+12. **If the session breaks (EIO errors):** Record whatever results you have in `$RUN_DIR/RESULTS.md`, note which tests were not run, and stop. A fresh session is needed to continue. Do not attempt to recover — the bash tool's output directory is permanently broken for that session.
 
 ---
 
