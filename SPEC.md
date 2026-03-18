@@ -327,7 +327,7 @@ This runs 3 independent vs instances, then picks the best of the 3 winners.
 --max-iterations N      Max review iterations (default: 3)
 --agent AGENT           Default agent (claude|codex|opencode)
 --model MODEL           Default model
---sandbox MODE          Sandbox mode (agent|docker|none, default: agent)
+--sandbox MODE          Sandbox mode (agent|docker, default: agent)
 --work-agent AGENT      Work step agent override
 --review-agent AGENT    Review step agent override
 --gate-agent AGENT      Gate step agent override
