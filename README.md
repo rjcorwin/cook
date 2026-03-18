@@ -27,8 +27,14 @@ cook "Implement dark mode" \
      "Review the implementation" \
      "DONE if no High issues, else ITERATE"
 
+# Repeat 3 times, each pass refining the last
+cook "Implement dark mode" x3
+
 # Race 3 versions in parallel, pick the best
 cook "Implement dark mode" v3 "least code, cleanest implementation"
+
+# Two different approaches, pick the winner
+cook "Auth with JWT" vs "Auth with sessions" pick "best security"
 
 # Work through a task list with a review gate on each task
 cook "Work on the next task in plan.md" review \
@@ -38,17 +44,24 @@ cook "Work on the next task in plan.md" review \
 cook "Implement dark mode" review v3 "cleanest result"
 ```
 
-## Prerequisites
-
-- [Node.js](https://nodejs.org/) 20+
-- An agent CLI on your PATH: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode)
-- [Docker](https://docs.docker.com/get-docker/) (only needed for `--sandbox docker`)
-
 ## Install
 
 ```sh
 npm install -g @let-it-cook/cli
 ```
+
+Run it yourself from the command line, or add the `/cook` skill to Claude Code so your agent can orchestrate its own subagent workflows:
+
+```sh
+mkdir -p .claude/skills
+cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook
+```
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- An agent CLI on your PATH: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode)
+- [Docker](https://docs.docker.com/get-docker/) (only needed for `--sandbox docker`)
 
 ## Primitives
 
@@ -167,19 +180,19 @@ cook "Add dark mode" race 3 "least code wins" # long-form alias
 Composes with loop operators:
 
 ```sh
-cook "Add dark mode" review v3 "cleanest"         # review loop, then race 3
-cook "Add dark mode" x3 v3 "most complete"        # 3 passes each, race 3
+cook "Add dark mode" review v3 "cleanest"         # race 3, each with a review loop
+cook "Add dark mode" x3 v3 "most complete"        # race 3, each with 3 passes
 ```
 
 Ralph composes with versions:
 
 ```sh
-# Race each task 3 ways as ralph advances
+# Race 3 complete ralph-with-review runs against each other
 cook "Work on next task in plan.md" review \
      ralph 5 "DONE if all tasks done, else NEXT" \
      v3 "most complete"
 
-# Race 3 complete ralph runs against each other
+# Same but without review — 3 plain ralph runs racing
 cook "Work on next task in plan.md" \
      ralph 5 "DONE if all tasks done, else NEXT" \
      v3 "most complete"
@@ -256,7 +269,6 @@ This creates:
 
 - `COOK.md` — Project instructions and agent loop template (JS template literal syntax). Lives in the project root for visibility.
 - `.cook/config.json` — Default agent/model/sandbox, per-step overrides, and environment variable passthrough.
-- `.cook/docker.json` — Docker-only config: network mode and allowed hosts. Only needed when using `--sandbox docker`.
 - `.cook/Dockerfile` — Project-specific dependencies layered on top of the base sandbox image (Docker mode only).
 - `.cook/logs/` — Session logs (gitignored by `.cook/.gitignore`).
 
@@ -311,6 +323,8 @@ When `cook` runs, it renders `COOK.md` as a JavaScript template literal, injecti
 | `${maxIterations}` | Max review iterations |
 | `${ralphIteration}` | Current ralph task number (ralph only) |
 | `${maxRalph}` | Max ralph tasks (ralph only) |
+| `${repeatPass}` | Current repeat pass number (repeat only) |
+| `${maxRepeatPasses}` | Total repeat passes (repeat only) |
 | `${logFile}` | Path to the session log file |
 
 The default template (used when no `COOK.md` exists):

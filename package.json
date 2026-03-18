@@ -1,6 +1,6 @@
 {
   "name": "@let-it-cook/cli",
-  "version": "3.3.0",
+  "version": "4.0.0",
   "type": "module",
   "bin": {
     "cook": "dist/cli.js"
@@ -9,7 +9,8 @@
     "node": ">=20"
   },
   "files": [
-    "dist"
+    "dist",
+    "skill"
   ],
   "scripts": {
     "build": "rm -rf dist && tsup"
