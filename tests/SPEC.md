@@ -42,6 +42,14 @@ cook "Improve the visual design of the todo app" x3 --sandbox none
 
 **Check:** A `▸ Repeat pass N/3` announcement appears before each pass. The status bar shows `work 1/1` per pass (inner iteration counter). Three passes ran sequentially, each refining the last. Design should be noticeably more polished than after pass 1.
 
+### repeat (long-form)
+
+```sh
+cook "Polish the CSS spacing and alignment" repeat 3 --sandbox none
+```
+
+**Check:** Identical behavior to `x3` — three sequential passes with `▸ Repeat pass N/3` announcements. Confirms `repeat N` is a valid alias for `xN`.
+
 ### review
 
 Default prompts:
@@ -63,13 +71,21 @@ cook "Add due dates to tasks" \
 
 **Check:** Review prompt is specific. Gate reasoning references the checklist. The loop may hit max iterations (3) on complex tasks — `⚠ Gate: max iterations (3) reached — stopping` is a valid outcome.
 
-Max iterations — forces multiple passes:
+Max iterations via flag:
 
 ```sh
 cook "Add drag-and-drop task reordering" review --max-iterations 5 --sandbox none
 ```
 
-**Check:** Up to 5 iterations allowed. Gate should converge before hitting the limit.
+**Check:** Up to 5 iterations allowed (status bar shows `Iteration: 1/5`). Gate should converge before hitting the limit.
+
+Max iterations via positional:
+
+```sh
+cook "Improve error handling in the app" review 5 --sandbox none
+```
+
+**Check:** Identical to `--max-iterations 5` — status bar shows `Iteration: 1/5`. Confirms `review N` sets max iterations positionally.
 
 ### xN + review
 
@@ -148,13 +164,35 @@ cook "Add a task statistics bar showing total, active, and completed counts" \
 
 **Check:** 3 worktrees created in `.cook/race/<session>/`. Status bar shows 3 parallel runs progressing. After all runs finish, a pick agent runs and selects a winner. Cook prompts `Apply Run N to current branch? [Y/n]` — type `Y` to confirm. Stats bar present in `index.html` after merge. New commit appears in `git log --oneline`.
 
-With pick criteria:
+Implicit pick (no `pick` keyword, bare criteria after vN):
 
 ```sh
 cook "Style the app with a cohesive color theme" \
-     v3 pick "most visually appealing and consistent" \
+     v3 "most visually appealing and consistent" \
      --sandbox none
 ```
+
+**Check:** Identical to `v3 pick "..."` — pick is the default resolver. 3 worktrees created, pick agent runs, winner merged.
+
+Long-form alias (`race N`):
+
+```sh
+cook "Add a loading spinner for async operations" \
+     race 2 pick "cleanest implementation" \
+     --sandbox none
+```
+
+**Check:** `race 2` behaves identically to `v2`. Two worktrees, pick agent selects winner.
+
+### review + versions
+
+```sh
+cook "Add form validation with error messages" \
+     review v3 pick "most robust validation" \
+     --sandbox none
+```
+
+**Check:** 3 parallel branches, each running a full review loop (work→review→gate). After all 3 finish, pick agent selects winner. Status bars show 3 runs each progressing through review iterations.
 
 ### vs
 
@@ -193,6 +231,31 @@ cook "Implement task export as JSON" \
 ```
 
 **Check:** No branch merged. `.cook/compare-<session>.md` written with a comparison document.
+
+### vs with per-branch loop operators
+
+```sh
+cook "Add task sorting by name" x3 \
+  vs \
+  "Add task sorting by date" x3 \
+  pick "better UX" \
+  --sandbox none
+```
+
+**Check:** Two branches, each running 3 repeat passes independently. Pick agent selects winner. Confirms per-branch loop operators compose with `vs`.
+
+### Second-level composition
+
+```sh
+cook "Add a progress bar" \
+  vs \
+  "Add a completion percentage display" \
+  pick "more intuitive" \
+  v2 pick "most polished" \
+  --sandbox none
+```
+
+**Check:** Two independent `vs` instances run (4 total branches — 2 per instance). Each instance picks a winner, then a second pick selects the best of the 2 winners.
 
 ---
 
