@@ -617,13 +617,20 @@ cook <span class="str">"Add dark mode"</span> review 5         <span class="comm
       <p>Provide custom prompts after <code>review</code>, or use positional shorthand:</p>
 
       <pre><code><span class="comment"># Explicit</span>
-cook <span class="str">"Add dark mode"</span> review <span class="str">"Review for accessibility"</span> <span class="str">"DONE if WCAG AA, else ITERATE"</span>
+cook <span class="str">"Add dark mode"</span> review \
+     <span class="str">"Review for accessibility"</span> \
+     <span class="str">"DONE if WCAG AA, else ITERATE"</span>
 
 <span class="comment"># Shorthand — same result</span>
-cook <span class="str">"Add dark mode"</span> <span class="str">"Review for accessibility"</span> <span class="str">"DONE if WCAG AA, else ITERATE"</span>
+cook <span class="str">"Add dark mode"</span> \
+     <span class="str">"Review for accessibility"</span> \
+     <span class="str">"DONE if WCAG AA, else ITERATE"</span>
 
 <span class="comment"># With iterate prompt and max-iterations</span>
-cook <span class="str">"Add dark mode"</span> <span class="str">"Review for accessibility"</span> <span class="str">"DONE if WCAG AA, else ITERATE"</span> <span class="str">"Fix the issues"</span> 5</code></pre>
+cook <span class="str">"Add dark mode"</span> \
+     <span class="str">"Review for accessibility"</span> \
+     <span class="str">"DONE if WCAG AA, else ITERATE"</span> \
+     <span class="str">"Fix the issues"</span> 5</code></pre>
 
       <p>Use different agents or models per step:</p>
 
