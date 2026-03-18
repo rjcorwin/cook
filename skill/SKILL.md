@@ -1,7 +1,7 @@
 ---
 name: cook
 description: Orchestrate coding agents with review loops, parallel races, repeat passes, and task-list progression. Use when: the user asks to "cook" something, wants iterative refinement, wants to race multiple approaches, or needs to work through a task list.
-allowed-tools: Bash(cook *), Bash(node */dist/cli.js *)
+allowed-tools: Bash(cook *)
 argument-hint: "<prompt>" [operators...] [flags...]
 ---
 
@@ -9,31 +9,32 @@ argument-hint: "<prompt>" [operators...] [flags...]
 
 `cook` wraps your coding agent (Claude Code, Codex, OpenCode) in composable workflows: review loops, repeat passes, parallel races, and task-list orchestration.
 
+**Important: Never use `--sandbox none`.** The default sandbox mode (`agent`) is correct when running as a skill. It preserves the parent agent's security boundaries.
+
 ## Quick reference
 
 ```sh
 # Single work call
-cook "Implement dark mode" --sandbox none
+cook "Implement dark mode"
 
 # Review loop (work → review → gate, repeat until DONE)
-cook "Implement dark mode" review --sandbox none
+cook "Implement dark mode" review
 
 # Repeat 3 times
-cook "Improve the design" x3 --sandbox none
+cook "Improve the design" x3
 
 # Race 3 versions, pick the best
-cook "Implement dark mode" v3 pick "cleanest implementation" --sandbox none
+cook "Implement dark mode" v3 pick "cleanest implementation"
 
 # Two approaches, pick the winner
-cook "Auth with JWT" vs "Auth with sessions" pick "best security" --sandbox none
+cook "Auth with JWT" vs "Auth with sessions" pick "best security"
 
 # Work through a task list
 cook "Do the next task in PLAN.md" \
-     ralph 5 "DONE if all tasks complete, else NEXT" \
-     --sandbox none
+     ralph 5 "DONE if all tasks complete, else NEXT"
 
 # Everything composes
-cook "Implement dark mode" review v3 "cleanest result" --sandbox none
+cook "Implement dark mode" review v3 "cleanest result"
 ```
 
 ## Operators
@@ -51,8 +52,8 @@ Operators compose left to right. Loop operators wrap everything to their left.
 
 Custom review/gate prompts (positional shorthand):
 ```sh
-cook "work prompt" "review prompt" "gate prompt" --sandbox none
-cook "work prompt" "review prompt" "gate prompt" "iterate prompt" N --sandbox none
+cook "work prompt" "review prompt" "gate prompt"
+cook "work prompt" "review prompt" "gate prompt" "iterate prompt" N
 ```
 
 ### Composition operators
@@ -78,7 +79,6 @@ cook "A" x3 vs "B" x3 pick "best"       # per-branch loop operators
 ## Flags
 
 ```
---sandbox none|agent|docker    Sandbox mode (use "none" for full access)
 --max-iterations N             Max review iterations
 --work-agent AGENT             Per-step agent override
 --review-agent AGENT
@@ -91,8 +91,7 @@ cook "A" x3 vs "B" x3 pick "best"       # per-branch loop operators
 
 Before running cook:
 1. The project must have `cook init` run (creates COOK.md, .cook/config.json)
-2. For composition tests (vs, vN), the working tree must be clean (commit first)
-3. Use `--sandbox none` when running from within an agent session
+2. For composition operators (vs, vN), the working tree must be clean (commit first)
 
 ## When to use cook vs doing the work directly
 
