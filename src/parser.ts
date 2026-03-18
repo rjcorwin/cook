@@ -305,6 +305,11 @@ function parsePipeline(tokens: string[], parsedFlags: ParsedFlags): Node {
             criteria = tokens[i]
             i++
           }
+        } else if (!isReserved(tokens[i]) && !isBareNumber(tokens[i])) {
+          // Bare string after vN without keyword — implicit pick with criteria
+          resolver = 'pick'
+          criteria = tokens[i]
+          i++
         }
       }
 
@@ -342,6 +347,11 @@ function parsePipeline(tokens: string[], parsedFlags: ParsedFlags): Node {
                   criteria2 = tokens[i]
                   i++
                 }
+              } else if (!isReserved(tokens[i]) && !isBareNumber(tokens[i])) {
+                // Bare string after second-level vN — implicit pick with criteria
+                resolver2 = 'pick'
+                criteria2 = tokens[i]
+                i++
               }
             }
 
@@ -373,9 +383,19 @@ export function parse(args: string[]): { ast: Node; flags: ParsedFlags } {
   const parsedFlags = buildParsedFlags(flags)
 
   if (positional.length === 0) {
-    // Check for --work flag
     if (parsedFlags.work) {
-      return { ast: { type: 'work', prompt: parsedFlags.work }, flags: parsedFlags }
+      let ast: Node = { type: 'work', prompt: parsedFlags.work }
+      if (parsedFlags.review || parsedFlags.gate) {
+        ast = {
+          type: 'review',
+          inner: ast,
+          reviewPrompt: parsedFlags.review,
+          gatePrompt: parsedFlags.gate,
+          iteratePrompt: parsedFlags.iterate,
+          maxIterations: parsedFlags.maxIterations ?? 3,
+        }
+      }
+      return { ast, flags: parsedFlags }
     }
     throw new Error('Work prompt is required')
   }

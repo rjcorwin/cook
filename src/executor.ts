@@ -20,7 +20,6 @@ import {
   buildJudgePrompt,
   parseJudgeVerdict,
   confirm,
-  pickOne,
   type RunResult,
 } from './race.js'
 import { logPhase, logStep, logOK, logWarn, logErr } from './log.js'
@@ -369,8 +368,8 @@ const RALPH_DONE_KEYWORDS = ['DONE', 'COMPLETE', 'FINISHED']
 function parseRalphVerdict(output: string): 'NEXT' | 'DONE' {
   for (const line of output.split('\n')) {
     const upper = line.trim().toUpperCase()
-    if (RALPH_DONE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'DONE'
-    if (NEXT_KEYWORDS.some(kw => upper.startsWith(kw))) return 'NEXT'
+    if (RALPH_DONE_KEYWORDS.some(kw => upper.includes(kw))) return 'DONE'
+    if (NEXT_KEYWORDS.some(kw => upper.includes(kw))) return 'NEXT'
   }
   logWarn('Ralph gate: no NEXT/DONE verdict found in output — defaulting to DONE (fail-safe)')
   return 'DONE'
@@ -398,6 +397,17 @@ async function executeComposition(
   } catch {
     logStep('No commits yet — creating initial empty commit')
     execSync('git commit --allow-empty -m "initial (cook)"', { cwd: projectRoot, stdio: 'pipe' })
+  }
+
+  // Fail early if working tree has uncommitted changes to tracked files
+  try {
+    execSync('git diff --quiet', { cwd: projectRoot, stdio: 'pipe' })
+    execSync('git diff --cached --quiet', { cwd: projectRoot, stdio: 'pipe' })
+  } catch {
+    throw new Error(
+      'Cannot run composition command: working tree has uncommitted changes. ' +
+      'Please commit or stash your changes first.'
+    )
   }
 
   const session = sessionId()
@@ -939,29 +949,6 @@ ${contextParts.join('\n\n')}`
   logStep('Run worktrees preserved for inspection:')
   for (const r of successfulRuns) {
     logStep(`  Run ${r.index}: ${r.worktreePath}`)
-  }
-
-  // Let user pick a branch to apply
-  const picked = await pickOne(
-    `\n  Apply a run? Enter number (1–${successfulRuns.length}) or blank to skip: `,
-    successfulRuns.length,
-  )
-  if (picked !== null) {
-    const chosen = successfulRuns[picked - 1]
-    try {
-      execSync(`git merge "${chosen.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
-      logOK(`Merged ${chosen.branchName} into current branch`)
-    } catch (err) {
-      logWarn(`Merge failed: ${err instanceof Error ? err.message : String(err)}`)
-      logStep(`  cd ${projectRoot} && git status`)
-      logStep(`  Worktrees preserved for inspection.`)
-      return { lastMessage: compareOutput }
-    }
-    for (const r of results) {
-      removeWorktree(projectRoot, r.worktreePath, r.branchName)
-    }
-    cleanupSessionDir(projectRoot, session)
-    logOK('Cleaned up worktrees')
   }
 
   return { lastMessage: compareOutput }

@@ -42,8 +42,8 @@ const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY']
 export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
   for (const line of output.split('\n')) {
     const upper = line.trim().toUpperCase()
-    if (DONE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'DONE'
-    if (ITERATE_KEYWORDS.some(kw => upper.startsWith(kw))) return 'ITERATE'
+    if (DONE_KEYWORDS.some(kw => upper.includes(kw))) return 'DONE'
+    if (ITERATE_KEYWORDS.some(kw => upper.includes(kw))) return 'ITERATE'
   }
   return 'ITERATE'
 }

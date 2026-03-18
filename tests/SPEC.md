@@ -1,6 +1,6 @@
-# Manual Testing
+# Test Specifications
 
-Uses a fresh todo app as the test subject. All commands run from `../todo`.
+Uses a fresh todo app as the test subject. Each test uses its own isolated directory (see `README.md` for conventions).
 
 > **Local build:** If testing a local build, replace `cook` with `node /path/to/cook/dist/cli.js`, or run `npm link` first from the cook project root.
 >
