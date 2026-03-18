@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cook — Let it cook.</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    :root {
+      --bg: #1a0a30;
+      --surface: #2d1b4e;
+      --border: #f0d040;
+      --text: #f8f0e0;
+      --text-muted: #b8a8d0;
+      --yellow: #f0d040;
+      --orange: #e86820;
+      --red: #d03030;
+      --pink: #f07098;
+      --blue: #4898f8;
+      --cyan: #40d8d0;
+      --green: #58c830;
+      --purple: #9058d0;
+      --dark-purple: #0e0620;
+      --window-bg: #180830;
+      --window-border-outer: #f8f0e0;
+      --window-border-inner: #5828a0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 2;
+      padding: 0;
+      overflow-x: hidden;
+      image-rendering: pixelated;
+      background-image:
+        radial-gradient(circle at 20% 20%, #2d1b5e 0%, transparent 40%),
+        radial-gradient(circle at 80% 60%, #1a1048 0%, transparent 40%),
+        radial-gradient(circle at 50% 90%, #281050 0%, transparent 30%);
+    }
+
+    /* === PIXEL GRID OVERLAY === */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 0, 0, 0.06) 3px,
+        rgba(0, 0, 0, 0.06) 4px
+      );
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .container {
+      max-width: 840px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 10;
+      padding: 0 1.5rem 2rem;
+    }
+
+    /* === EARTHBOUND WINDOW BOX === */
+    .eb-window {
+      background: var(--window-bg);
+      border: 4px solid var(--window-border-outer);
+      box-shadow:
+        inset 0 0 0 4px var(--window-border-inner),
+        8px 8px 0 rgba(0, 0, 0, 0.4);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* === HERO === */
+    .hero {
+      text-align: center;
+      padding: 4rem 0 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.05em;
+      display: inline-block;
+    }
+
+    .hero h1 .let-it {
+      color: var(--text);
+    }
+
+    .hero h1 .dot {
+      color: var(--yellow);
+      animation: colorCycle 4s steps(4) infinite;
+    }
+
+    .hero h1 .period {
+      color: var(--orange);
+      animation: blink 1s steps(1) infinite;
+    }
+
+    @keyframes colorCycle {
+      0% { color: var(--yellow); }
+      25% { color: var(--orange); }
+      50% { color: var(--pink); }
+      75% { color: var(--cyan); }
+    }
+
+    @keyframes blink {
+      0%, 60% { opacity: 1; }
+      61%, 100% { opacity: 0; }
+    }
+
+    .hero .tagline {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 1rem auto 2rem;
+      line-height: 2.2;
+    }
+
+    .hero .tagline strong {
+      color: var(--yellow);
+    }
+
+    /* === INSTALL BAR === */
+    .install-bar {
+      display: inline-block;
+      background: var(--dark-purple);
+      border: 4px solid var(--yellow);
+      box-shadow:
+        inset 0 0 0 2px var(--orange),
+        6px 6px 0 rgba(0, 0, 0, 0.4);
+      padding: 0.8rem 1.5rem;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 0.65rem;
+      color: var(--yellow);
+      cursor: pointer;
+      transition: transform 0.1s steps(1);
+    }
+
+    .install-bar:hover {
+      transform: translate(-2px, -2px);
+      box-shadow:
+        inset 0 0 0 2px var(--orange),
+        8px 8px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    .install-bar:active {
+      transform: translate(2px, 2px);
+      box-shadow:
+        inset 0 0 0 2px var(--orange),
+        2px 2px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    .install-bar::before {
+      content: "> $ ";
+      color: var(--cyan);
+    }
+
+    .links {
+      margin-top: 1.5rem;
+      font-size: 0.65rem;
+    }
+
+    .links a {
+      color: var(--cyan);
+      text-decoration: none;
+      letter-spacing: 0.1em;
+      padding: 0.3rem 0.6rem;
+      border: 2px solid transparent;
+    }
+
+    .links a:hover {
+      color: var(--yellow);
+      border-color: var(--yellow);
+    }
+
+    /* === DIVIDER === */
+    .pixel-divider {
+      height: 4px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--yellow) 0px, var(--yellow) 8px,
+        var(--orange) 8px, var(--orange) 16px,
+        var(--pink) 16px, var(--pink) 24px,
+        var(--cyan) 24px, var(--cyan) 32px
+      );
+      margin: 2rem 0;
+      image-rendering: pixelated;
+    }
+
+    /* === SECTION HEADERS === */
+    h2 {
+      font-size: 1rem;
+      margin: 2.5rem 0 1rem;
+      padding: 0.6rem 1rem;
+      color: var(--dark-purple);
+      background: var(--yellow);
+      display: inline-block;
+      box-shadow: 4px 4px 0 var(--orange);
+      letter-spacing: 0.05em;
+    }
+
+    h3 {
+      font-size: 0.75rem;
+      margin: 1.5rem 0 0.8rem;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+    }
+
+    h3::before {
+      content: ">> ";
+      color: var(--pink);
+    }
+
+    /* === CODE BLOCKS === */
+    pre {
+      background: var(--dark-purple);
+      border: 4px solid var(--purple);
+      box-shadow:
+        inset 0 0 0 2px #3a1878,
+        6px 6px 0 rgba(0, 0, 0, 0.3);
+      padding: 1.2rem 1.5rem;
+      overflow-x: auto;
+      margin-bottom: 1.5rem;
+      font-size: 0.6rem;
+      line-height: 2.2;
+    }
+
+    code {
+      font-family: 'Press Start 2P', monospace;
+      color: var(--text);
+    }
+
+    p code, li code, td code {
+      background: var(--dark-purple);
+      border: 2px solid var(--purple);
+      padding: 0.15em 0.4em;
+      font-size: 0.65rem;
+      color: var(--pink);
+    }
+
+    .comment { color: #6a5a8a; }
+
+    p {
+      margin-bottom: 1rem;
+      color: var(--text);
+      font-size: 0.7rem;
+      line-height: 2.2;
+    }
+
+    a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--yellow);
+    }
+
+    ul, ol {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+
+    li {
+      margin-bottom: 0.5rem;
+      font-size: 0.7rem;
+      line-height: 2;
+    }
+
+    li::marker {
+      color: var(--pink);
+    }
+
+    strong {
+      color: var(--yellow);
+    }
+
+    /* === FEATURE GRID === */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+
+    .feature-card {
+      background: var(--window-bg);
+      border: 4px solid var(--window-border-outer);
+      box-shadow:
+        inset 0 0 0 3px var(--window-border-inner),
+        6px 6px 0 rgba(0, 0, 0, 0.4);
+      padding: 1.2rem;
+      transition: transform 0.1s steps(1);
+    }
+
+    .feature-card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow:
+        inset 0 0 0 3px var(--window-border-inner),
+        8px 8px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    .feature-card h4 {
+      font-size: 0.7rem;
+      margin-bottom: 0.6rem;
+      color: var(--yellow);
+      letter-spacing: 0.05em;
+    }
+
+    .feature-card p {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      margin-bottom: 0;
+      line-height: 2;
+    }
+
+    /* === PIPELINE === */
+    .pipe {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3rem;
+      margin: 2rem 0;
+      flex-wrap: wrap;
+    }
+
+    .pipe-step {
+      background: var(--surface);
+      border: 3px solid var(--yellow);
+      padding: 0.5rem 1rem;
+      font-size: 0.6rem;
+      color: var(--yellow);
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    .pipe-arrow {
+      color: var(--pink);
+      font-size: 0.8rem;
+      animation: arrowBounce 1s steps(2) infinite;
+    }
+
+    @keyframes arrowBounce {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
+    }
+
+    /* === TABLE === */
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-bottom: 1.5rem;
+      border: 4px solid var(--window-border-outer);
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.8rem 1rem;
+      border: 2px solid var(--window-border-inner);
+      font-size: 0.6rem;
+      line-height: 2;
+    }
+
+    th {
+      background: var(--surface);
+      color: var(--yellow);
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      background: var(--window-bg);
+    }
+
+    /* === BLOCKQUOTE === */
+    blockquote {
+      border-left: 6px solid var(--pink);
+      padding: 0.8rem 1.2rem;
+      margin-bottom: 1rem;
+      background: var(--window-bg);
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    blockquote p {
+      margin-bottom: 0;
+      color: var(--text-muted);
+    }
+
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    /* === FOOTER === */
+    footer {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      margin-top: 3rem;
+    }
+
+    footer::before {
+      content: '';
+      display: block;
+      height: 4px;
+      margin-bottom: 2rem;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--yellow) 0px, var(--yellow) 8px,
+        var(--orange) 8px, var(--orange) 16px,
+        var(--pink) 16px, var(--pink) 24px,
+        var(--cyan) 24px, var(--cyan) 32px
+      );
+    }
+
+    footer p {
+      font-size: 0.9rem;
+      color: var(--yellow);
+      letter-spacing: 0.15em;
+      animation: footerCycle 6s steps(1) infinite;
+    }
+
+    @keyframes footerCycle {
+      0% { color: var(--yellow); }
+      33% { color: var(--pink); }
+      66% { color: var(--cyan); }
+    }
+
+    /* === SPRITES / DECORATIONS === */
+    .sprite-row {
+      text-align: center;
+      font-size: 1.5rem;
+      letter-spacing: 0.5rem;
+      margin: 1rem 0;
+      animation: spriteWalk 2s steps(4) infinite;
+    }
+
+    @keyframes spriteWalk {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(4px); }
+      50% { transform: translateX(0); }
+      75% { transform: translateX(-4px); }
+    }
+
+    /* === ACCENT GLOW (now pixel style) === */
+    .accent-glow {
+      color: var(--yellow);
+      background: var(--surface);
+      padding: 0 0.3em;
+      border: 2px solid var(--yellow);
+    }
+
+    /* === SCROLL REVEAL === */
+    .js .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.4s steps(4), transform 0.4s steps(4);
+    }
+
+    .js .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 1.8rem; }
+      .feature-grid { grid-template-columns: 1fr; }
+      h2 { font-size: 0.8rem; }
+      .pipe { gap: 0.2rem; }
+      .pipe-step { font-size: 0.5rem; padding: 0.4rem 0.6rem; }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 1.3rem; }
+      .container { padding: 0 0.8rem 2rem; }
+    }
+
+    /* === PREFERS-REDUCED-MOTION === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .js .reveal {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <header class="hero">
+      <div class="sprite-row">~*~ ~*~ ~*~</div>
+      <h1><span class="let-it">Let it </span><span class="dot">cook</span><span class="period">.</span></h1>
+      <p class="tagline">
+        Reviewing your coding agent's first pass is often a waste of your time. Cook puts your preferred agent in a <strong>"cook loop"</strong> and doesn't let it finish until it's actually done.
+      </p>
+      <div class="install-bar" title="Click to copy" onclick="(function(el){try{if(navigator.clipboard){navigator.clipboard.writeText('npm install -g @let-it-cook/cli').then(function(){el.style.borderColor='var(--green)';el.style.color='var(--green)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}).catch(function(){el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)})}else{el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}}catch(e){}})(this)">npm install -g @let-it-cook/cli</div>
+      <p class="links">
+        <a href="https://github.com/rjcorwin/cook">GitHub</a> &middot;
+        <a href="https://www.npmjs.com/package/@let-it-cook/cli">npm</a>
+      </p>
+    </header>
+
+    <div class="pixel-divider"></div>
+
+    <section class="section reveal">
+      <pre><code>cook "Implement dark mode" \                          <span class="comment"># work prompt</span>
+     "Code review the implementation" \               <span class="comment"># review prompt</span>
+     "If no major issues say DONE, else say ITERATE" \ <span class="comment"># gate prompt</span>
+     "Fix the issues identified in the review"         <span class="comment"># iterate prompt</span></code></pre>
+
+      <p>By default, <span class="accent-glow">cook uses your local Claude Code instance</span> for all the work, but you can also use codex or opencode.</p>
+
+      <pre><code>cook "Implement dark mode" --agent opencode --agent-model z-ai/glm-4.7
+cook "Implement dark mode" --agent codex</code></pre>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>* Race</h4>
+          <p>Run parallel versions in separate git worktrees, AI picks the best.</p>
+        </div>
+        <div class="feature-card">
+          <h4>* Vs</h4>
+          <p>Explore multiple directions in separate worktrees with different prompts.</p>
+        </div>
+        <div class="feature-card">
+          <h4>* Repeat</h4>
+          <p>Run the same task N times in sequence, with or without a review loop.</p>
+        </div>
+        <div class="feature-card">
+          <h4>* Ralph</h4>
+          <p>Embed cook loops in ralph loops to work through a task list.</p>
+        </div>
+      </div>
+
+      <pre><code><span class="comment"># Race 3 parallel versions</span>
+cook "Implement dark mode" v3 "pick least code, cleanest implementation"
+
+<span class="comment"># Explore directions</span>
+cook "Implement dark mode with CSS" vs "Implement dark mode with Tailwind"
+
+<span class="comment"># Ralph through a task list</span>
+cook "Work on the next task in plan.md" ralph "DONE if all tasks done, else NEXT"
+
+<span class="comment"># Race 3 ralph loop executions — best overall wins</span>
+cook "Implement the next step in plan.md" ralph "DONE if all tasks done, else NEXT" v3 "most complete"
+
+<span class="comment"># Race each task 3 ways as ralph advances</span>
+cook "Implement the next step in plan.md" v3 "most complete" ralph "DONE if all tasks done, else NEXT"</code></pre>
+    </section>
+
+    <h2 class="reveal">* Cook Loop</h2>
+    <section class="section reveal">
+      <p>The core loop runs <strong>work -> review -> gate -> iterate</strong> until the gate says DONE or max iterations are reached (default: 3).</p>
+
+      <div class="pipe">
+        <span class="pipe-step">work</span>
+        <span class="pipe-arrow">-></span>
+        <span class="pipe-step">review</span>
+        <span class="pipe-arrow">-></span>
+        <span class="pipe-step">gate</span>
+        <span class="pipe-arrow">-></span>
+        <span class="pipe-step">iterate</span>
+        <span class="pipe-arrow">&lt;&lt;</span>
+      </div>
+
+      <pre><code>cook "Add dark mode"                    <span class="comment"># single work call (no loop)</span>
+cook "Add dark mode" review             <span class="comment"># review loop, all defaults</span>
+cook "Add dark mode" 5                  <span class="comment"># review loop, up to 5 iterations</span></code></pre>
+
+      <p>Override individual step prompts positionally or with flags:</p>
+
+      <pre><code><span class="comment"># Positional: work, review, gate, iterate</span>
+cook "Add dark mode" "Review for accessibility" "DONE if WCAG AA, else ITERATE" "Fix the a11y issues"
+
+<span class="comment"># Flags (mix and match with positional)</span>
+cook "Add dark mode" --review "Review for accessibility" --iterate "Fix the a11y issues" 5</code></pre>
+
+      <p>Use different agents or models per step:</p>
+
+      <pre><code>cook "Add dark mode" \
+  --work-agent codex --work-model gpt-5-codex \
+  --review-agent claude --review-model opus</code></pre>
+    </section>
+
+    <h2 class="reveal">* Vs Mode</h2>
+    <section class="section reveal">
+      <p>Run different approaches in parallel git worktrees, then combine the results. Each branch gets its own full cook loop.</p>
+
+      <pre><code>cook "Implement dark mode with CSS variables" vs "Implement dark mode with Tailwind"</code></pre>
+
+      <h3>Join Strategies</h3>
+      <p>After all branches complete, a join strategy combines the results:</p>
+
+      <p><strong>pick</strong> (default) — Picks a single winner. A judge agent reads all branch logs and diffs, then responds with <code>PICK N</code>. The winning branch is merged into your current branch.</p>
+      <pre><code>cook "Approach A" vs "Approach B" pick "fewest lines changed"</code></pre>
+
+      <p><strong>merge</strong> — Synthesizes the best parts of all branches into a new implementation. The merge agent reads diffs and logs from every branch, then produces a combined result with its own cook loop.</p>
+      <pre><code>cook "Approach A" vs "Approach B" merge "combine the strongest elements" 5</code></pre>
+
+      <p><strong>compare</strong> — Produces a comparison document without picking or merging. Branches are preserved for manual inspection.</p>
+      <pre><code>cook "Approach A" vs "Approach B" compare</code></pre>
+
+      <h3>Per-branch Overrides</h3>
+      <p>Each branch can have its own review, gate, and iteration limit:</p>
+      <pre><code>cook "Build with React" "Check accessibility" "DONE if WCAG AA" 3 \
+  vs \
+  "Build with Vue" "Check bundle size" "DONE if under 50kb" 5 \
+  pick "best developer experience"</code></pre>
+    </section>
+
+    <h2 class="reveal">* Repeat Mode</h2>
+    <section class="section reveal">
+      <p>Run the same task N times in sequence. Useful for accumulating work before review or looping for variety.</p>
+
+      <pre><code>cook "Add dark mode" x3              <span class="comment"># repeat 3 times</span>
+cook "Add dark mode" repeat 3        <span class="comment"># long-form alias</span>
+cook "Add dark mode" x3 review       <span class="comment"># 3 work passes, then a review loop</span>
+cook "Add dark mode" review x3       <span class="comment"># review loop repeated 3 times</span></code></pre>
+    </section>
+
+    <h2 class="reveal">* Race Mode</h2>
+    <section class="section reveal">
+      <p>Race N identical runs in parallel git worktrees, then let a judge pick the best:</p>
+
+      <pre><code>cook "Add dark mode" v3                           <span class="comment"># race 3 versions</span>
+cook "Add dark mode" v3 "least code wins"         <span class="comment"># custom pick criteria</span>
+cook "Add dark mode" race 3 "least code wins"     <span class="comment"># long-form alias</span></code></pre>
+
+      <p>All the usual flags work alongside race:</p>
+      <pre><code>cook "Add dark mode" v3 "cleanest diff" --agent codex --max-iterations 5</code></pre>
+
+      <p>Each run gets its own worktree branched from HEAD. After all runs complete, a judge agent reads every session log and responds with <code>PICK N</code>. The winning branch is merged into your current branch.</p>
+    </section>
+
+    <h2 class="reveal">* Ralph Loop</h2>
+    <section class="section reveal">
+      <p>Ralph puts the cook loop inside an outer loop that advances through a task list. When the ralph gate says <strong>NEXT</strong>, work continues with the same prompt for the next task. When it says <strong>DONE</strong>, the loop exits.</p>
+
+      <pre><code>cook "Work on the next task in plan.md" ralph "DONE if all tasks complete, else NEXT"
+cook "Work on the next task in plan.md" ralph 5 "DONE if all tasks complete, else NEXT"  <span class="comment"># up to 5 tasks</span></code></pre>
+
+      <p>Add a review loop inside ralph for per-task quality gates:</p>
+      <pre><code>cook "Work on the next task in plan.md" review ralph 5 "DONE if all tasks complete, else NEXT"</code></pre>
+
+      <p>The inner cook loop gate decides <strong>DONE</strong> (pass to ralph gate) or <strong>ITERATE</strong> (loop back and fix). The ralph gate decides <strong>DONE</strong> (all tasks complete, exit) or <strong>NEXT</strong> (advance to next task, reset iteration counter).</p>
+
+      <h3>Composing Ralph with Race</h3>
+      <p>Keywords compose right-to-left — the rightmost keyword is the outermost wrapper:</p>
+      <pre><code><span class="comment"># Race each task 3 ways as ralph advances through the list</span>
+cook "Next task in plan.md" v3 "cleanest" ralph 5 "DONE if all tasks done, else NEXT"
+
+<span class="comment"># Race 3 complete ralph runs against each other</span>
+cook "Next task in plan.md" ralph 5 "DONE if all tasks done, else NEXT" v3 "most complete"</code></pre>
+    </section>
+
+    <h2 class="reveal">* Sandbox Modes</h2>
+    <section class="section reveal">
+      <p>Cook supports three sandbox modes via <code>--sandbox</code>:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Flag</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Agent</strong> (default)</td>
+            <td><code>--sandbox agent</code></td>
+            <td>Spawns agents natively. Agents use their own OS-level sandboxes (Claude's Seatbelt/Landlock, Codex's workspace sandbox). No Docker required.</td>
+          </tr>
+          <tr>
+            <td><strong>Docker</strong></td>
+            <td><code>--sandbox docker</code></td>
+            <td>Runs agents inside a Docker container with network restrictions. Full isolation.</td>
+          </tr>
+          <tr>
+            <td><strong>None</strong></td>
+            <td><code>--sandbox none</code></td>
+            <td>Spawns agents natively with all safety bypassed (<code>--dangerously-skip-permissions</code> etc.). Use with caution.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <blockquote>
+        <p><strong>Note:</strong> OpenCode is only supported in Docker mode — it has no OS-level sandbox.</p>
+      </blockquote>
+    </section>
+
+    <h2 class="reveal">* Configuration</h2>
+    <section class="section reveal">
+      <p>Run <code>cook init</code> in your project root to scaffold the configuration files:</p>
+
+      <pre><code>cook init</code></pre>
+
+      <p>This creates:</p>
+      <ul>
+        <li><code>COOK.md</code> — Project instructions and agent loop template</li>
+        <li><code>.cook/config.json</code> — Default agent/model/sandbox, per-step overrides</li>
+        <li><code>.cook/docker.json</code> — Docker-only config: network mode and allowed hosts</li>
+        <li><code>.cook/Dockerfile</code> — Project-specific dependencies (Docker mode only)</li>
+        <li><code>.cook/logs/</code> — Session logs (gitignored)</li>
+      </ul>
+
+      <p>Example <code>.cook/config.json</code>:</p>
+      <pre><code>{
+  "agent": "claude",
+  "sandbox": "agent",
+  "steps": {
+    "work": {
+      "agent": "codex",
+      "model": "gpt-5-codex"
+    },
+    "review": {
+      "agent": "claude",
+      "model": "opus"
+    },
+    "gate": {
+      "sandbox": "docker"
+    }
+  },
+  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
+}</code></pre>
+
+      <p>The <code>env</code> array controls which environment variables from your host are forwarded to the agent process. Auth tokens like <code>CLAUDE_CODE_OAUTH_TOKEN</code> and <code>OPENAI_API_KEY</code> need to be listed here for agents to authenticate.</p>
+
+      <p>CLI defaults (<code>--agent</code>, <code>--model</code>, <code>--sandbox</code>) override config defaults for a single run. Step flags (<code>--work-agent</code>, <code>--review-agent</code>, etc.) override both.</p>
+
+      <h3>Docker Mode Details</h3>
+      <p>When using <code>--sandbox docker</code>, the agent runs inside a Docker container. Network access is restricted by default using <code>iptables</code>. Only outbound HTTPS to the agent's API endpoint is allowed.</p>
+
+      <p>To allow additional hosts, create <code>.cook/docker.json</code>:</p>
+      <pre><code>{
+  "network": {
+    "mode": "restricted",
+    "allowedHosts": ["registry.npmjs.org", "api.github.com"]
+  }
+}</code></pre>
+
+      <p>To disable network restrictions entirely (not recommended):</p>
+      <pre><code>{
+  "network": {
+    "mode": "unrestricted"
+  }
+}</code></pre>
+    </section>
+
+    <h2 class="reveal">* COOK.md</h2>
+    <section class="section reveal">
+      <p><code>COOK.md</code> lives in your project root and does two things: it holds project-level instructions for the agent, and it defines the template used to construct the prompt sent to the agent at each step.</p>
+
+      <p>When <code>cook</code> runs, it renders <code>COOK.md</code> as a JavaScript template literal, injecting these variables:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>${step}</code></td>
+            <td>Current step name: <code>work</code>, <code>review</code>, <code>gate</code>, <code>iterate</code>, or <code>ralph</code></td>
+          </tr>
+          <tr>
+            <td><code>${prompt}</code></td>
+            <td>The prompt for this step</td>
+          </tr>
+          <tr>
+            <td><code>${lastMessage}</code></td>
+            <td>Output from the previous step</td>
+          </tr>
+          <tr>
+            <td><code>${iteration}</code></td>
+            <td>Current iteration number</td>
+          </tr>
+          <tr>
+            <td><code>${maxIterations}</code></td>
+            <td>Max iterations configured</td>
+          </tr>
+          <tr>
+            <td><code>${logFile}</code></td>
+            <td>Path to the session log file</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>The default template (used when no <code>COOK.md</code> exists):</p>
+
+      <pre><code># COOK.md
+
+## Project Instructions
+
+## Agent Loop
+
+Step: **${step}** | Iteration: ${iteration}/${maxIterations}
+
+### Task
+${prompt}
+
+${lastMessage ? '### Previous Output\n' + lastMessage : ''}
+
+### History
+Session log: ${logFile}
+Read the session log for full context from previous steps.</code></pre>
+
+      <p>Backticks and bare <code>$</code> in your <code>COOK.md</code> are escaped automatically so they don't break the template. To emit a literal <code>${...}</code> in the rendered output, write <code>\${...}</code> in <code>COOK.md</code>.</p>
+
+      <p>Edit the <code>## Project Instructions</code> section to give the agent context about your project. The <code>## Agent Loop</code> section controls the prompt structure.</p>
+    </section>
+
+    <footer>
+      <p>* Let it cook. *</p>
+    </footer>
+
+  </div>
+
+  <script>
+    // Enable reveal animations only when JS is available
+    document.documentElement.classList.add('js');
+
+    // === SCROLL REVEAL ===
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // === TITLE ANIMATION ===
+    const titles = [
+      'cook - Let it cook.',
+      'cook - SMAAAASH!!',
+      'cook - You won!',
+      'cook - HP restored!',
+    ];
+    let titleIdx = 0;
+    setInterval(() => {
+      titleIdx = (titleIdx + 1) % titles.length;
+      document.title = titles[titleIdx];
+    }, 4000);
+  </script>
+</body>
+</html>
