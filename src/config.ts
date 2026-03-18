@@ -5,7 +5,7 @@ import type { SandboxMode } from './runner.js'
 
 export type AnimationStyle = 'flame' | 'strip' | 'campfire' | 'pot' | 'pulse'
 export type AgentName = 'claude' | 'codex' | 'opencode'
-export type StepName = 'work' | 'review' | 'gate'
+export type StepName = 'work' | 'review' | 'gate' | 'iterate' | 'ralph'
 
 export interface StepAgentConfig {
   agent?: AgentName
@@ -69,7 +69,7 @@ export function loadConfig(projectRoot: string): CookConfig {
     env: ['CLAUDE_CODE_OAUTH_TOKEN'],
     animation: 'strip',
     agent: 'claude',
-    steps: { work: {}, review: {}, gate: {} },
+    steps: { work: {}, review: {}, gate: {}, iterate: {}, ralph: {} },
   }
 
   const configPath = resolveConfigPath(projectRoot)
@@ -92,6 +92,8 @@ export function loadConfig(projectRoot: string): CookConfig {
       work: parseStepAgentConfig(parsed.steps?.work),
       review: parseStepAgentConfig(parsed.steps?.review),
       gate: parseStepAgentConfig(parsed.steps?.gate),
+      iterate: parseStepAgentConfig(parsed.steps?.iterate),
+      ralph: parseStepAgentConfig(parsed.steps?.ralph),
     }
     const sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
     return { sandbox, env, animation, agent, model, steps }
