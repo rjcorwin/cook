@@ -44,32 +44,24 @@ cook "Work on the next task in plan.md" review \
 cook "Implement dark mode" review v3 "cleanest result"
 ```
 
-## Prerequisites
-
-- [Node.js](https://nodejs.org/) 20+
-- An agent CLI on your PATH: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode)
-- [Docker](https://docs.docker.com/get-docker/) (only needed for `--sandbox docker`)
-
 ## Install
 
 ```sh
 npm install -g @let-it-cook/cli
 ```
 
-### As a Claude Code skill
-
-Give your Claude Code agent the `/cook` skill so it can orchestrate its own subagent workflows:
+Run it yourself from the command line, or add the `/cook` skill to Claude Code so your agent can orchestrate its own subagent workflows:
 
 ```sh
-# Copy the skill into your project
 mkdir -p .claude/skills
 cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook
-
-# Or if you cloned the repo
-cp -r /path/to/cook/skill .claude/skills/cook
 ```
 
-Then in Claude Code, use `/cook "your prompt" [operators...]` — or let the agent invoke it autonomously when it makes sense.
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- An agent CLI on your PATH: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode)
+- [Docker](https://docs.docker.com/get-docker/) (only needed for `--sandbox docker`)
 
 ## Primitives
 
