@@ -250,6 +250,7 @@
     }
 
     .comment { color: #6a5a8a; }
+    .str { color: var(--green); }
 
     p {
       margin-bottom: 1rem;
@@ -520,34 +521,34 @@
     <div class="pixel-divider"></div>
 
     <section class="section reveal">
-      <pre><code>cook "Implement dark mode" review                         <span class="comment"># review loop, default prompts</span>
+      <pre><code>cook <span class="str">"Implement dark mode"</span> review                         <span class="comment"># review loop, default prompts</span>
 
-cook "Implement dark mode" \
-     "Review the implementation" \                        <span class="comment"># review prompt</span>
-     "DONE if no High issues, else ITERATE"               <span class="comment"># gate prompt</span></code></pre>
+cook <span class="str">"Implement dark mode"</span> \
+     <span class="str">"Review the implementation"</span> \                        <span class="comment"># review prompt</span>
+     <span class="str">"DONE if no High issues, else ITERATE"</span>               <span class="comment"># gate prompt</span></code></pre>
 
       <p>By default, <span class="accent-glow">cook uses your local Claude Code instance</span> for all the work, but you can also use codex or opencode.</p>
 
-      <pre><code>cook "Implement dark mode" --agent opencode --model glm-4.7
-cook "Implement dark mode" --agent codex</code></pre>
+      <pre><code>cook <span class="str">"Implement dark mode"</span> --agent opencode --model glm-4.7
+cook <span class="str">"Implement dark mode"</span> --agent codex</code></pre>
 
       <p>Build more complex workflows from composable primitives:</p>
 
       <pre><code><span class="comment"># Repeat 3 times, each pass refining the last</span>
-cook "Implement dark mode" x3
+cook <span class="str">"Implement dark mode"</span> x3
 
 <span class="comment"># Race 3 versions in parallel, pick the best</span>
-cook "Implement dark mode" v3 "least code, cleanest implementation"
+cook <span class="str">"Implement dark mode"</span> v3 <span class="str">"least code, cleanest implementation"</span>
 
 <span class="comment"># Two different approaches, pick the winner</span>
-cook "Auth with JWT" vs "Auth with sessions" pick "best security"
+cook <span class="str">"Auth with JWT"</span> vs <span class="str">"Auth with sessions"</span> pick <span class="str">"best security"</span>
 
 <span class="comment"># Work through a task list with a review gate on each task</span>
-cook "Work on the next task in plan.md" review \
-     ralph 5 "DONE if all tasks complete, else NEXT"
+cook <span class="str">"Work on the next task in plan.md"</span> review \
+     ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span>
 
 <span class="comment"># Everything composes</span>
-cook "Implement dark mode" review v3 "cleanest result"</code></pre>
+cook <span class="str">"Implement dark mode"</span> review v3 <span class="str">"cleanest result"</span></code></pre>
     </section>
 
     <h2 class="reveal">* Primitives</h2>
@@ -571,16 +572,16 @@ cook "Implement dark mode" review v3 "cleanest result"</code></pre>
 
       <p>Operators compose left to right. Loop operators wrap everything to their left.</p>
 
-      <pre><code>cook "work" x3 review          <span class="comment"># (work×3) → review loop</span>
-cook "work" review x3          <span class="comment"># (work → review loop) × 3</span>
-cook "work" review v3 pick     <span class="comment"># race 3, each with a review loop</span></code></pre>
+      <pre><code>cook <span class="str">"work"</span> x3 review          <span class="comment"># (work×3) → review loop</span>
+cook <span class="str">"work"</span> review x3          <span class="comment"># (work → review loop) × 3</span>
+cook <span class="str">"work"</span> review v3 pick     <span class="comment"># race 3, each with a review loop</span></code></pre>
     </section>
 
     <h2 class="reveal">* Work</h2>
     <section class="section reveal">
       <p>A cook with no operators is a single LLM call:</p>
 
-      <pre><code>cook "Implement dark mode"</code></pre>
+      <pre><code>cook <span class="str">"Implement dark mode"</span></code></pre>
 
       <p>One agent call, done.</p>
     </section>
@@ -591,10 +592,10 @@ cook "work" review v3 pick     <span class="comment"># race 3, each with a revie
       <h3>repeat (xN)</h3>
       <p><code>xN</code> runs work N times sequentially, each pass seeing the previous output.</p>
 
-      <pre><code>cook "Add dark mode" x3           <span class="comment"># 3 sequential passes</span>
-cook "Add dark mode" repeat 3     <span class="comment"># long-form</span>
-cook "Add dark mode" x3 review    <span class="comment"># 3 passes, then a review loop</span>
-cook "Add dark mode" review x3    <span class="comment"># review loop repeated 3 times</span></code></pre>
+      <pre><code>cook <span class="str">"Add dark mode"</span> x3           <span class="comment"># 3 sequential passes</span>
+cook <span class="str">"Add dark mode"</span> repeat 3     <span class="comment"># long-form</span>
+cook <span class="str">"Add dark mode"</span> x3 review    <span class="comment"># 3 passes, then a review loop</span>
+cook <span class="str">"Add dark mode"</span> review x3    <span class="comment"># review loop repeated 3 times</span></code></pre>
 
       <h3>review</h3>
       <p><code>review</code> adds a review→gate loop. After work, a reviewer checks quality and a gate decides DONE or ITERATE. On ITERATE, the iterate step runs, then review→gate repeats.</p>
@@ -610,42 +611,42 @@ cook "Add dark mode" review x3    <span class="comment"># review loop repeated 3
         <span class="pipe-arrow">&lt;&lt;</span>
       </div>
 
-      <pre><code>cook "Add dark mode" review           <span class="comment"># default prompts, up to 3 iterations</span>
-cook "Add dark mode" review 5         <span class="comment"># up to 5 iterations</span></code></pre>
+      <pre><code>cook <span class="str">"Add dark mode"</span> review           <span class="comment"># default prompts, up to 3 iterations</span>
+cook <span class="str">"Add dark mode"</span> review 5         <span class="comment"># up to 5 iterations</span></code></pre>
 
       <p>Provide custom prompts after <code>review</code>, or use positional shorthand:</p>
 
       <pre><code><span class="comment"># Explicit</span>
-cook "Add dark mode" review "Review for accessibility" "DONE if WCAG AA, else ITERATE"
+cook <span class="str">"Add dark mode"</span> review <span class="str">"Review for accessibility"</span> <span class="str">"DONE if WCAG AA, else ITERATE"</span>
 
 <span class="comment"># Shorthand — same result</span>
-cook "Add dark mode" "Review for accessibility" "DONE if WCAG AA, else ITERATE"
+cook <span class="str">"Add dark mode"</span> <span class="str">"Review for accessibility"</span> <span class="str">"DONE if WCAG AA, else ITERATE"</span>
 
 <span class="comment"># With iterate prompt and max-iterations</span>
-cook "Add dark mode" "Review for accessibility" "DONE if WCAG AA, else ITERATE" "Fix the issues" 5</code></pre>
+cook <span class="str">"Add dark mode"</span> <span class="str">"Review for accessibility"</span> <span class="str">"DONE if WCAG AA, else ITERATE"</span> <span class="str">"Fix the issues"</span> 5</code></pre>
 
       <p>Use different agents or models per step:</p>
 
-      <pre><code>cook "Add dark mode" review \
+      <pre><code>cook <span class="str">"Add dark mode"</span> review \
   --work-agent codex --work-model gpt-5-codex \
   --review-agent claude --review-model opus</code></pre>
 
       <h3>ralph</h3>
       <p>Ralph wraps a cook with an outer gate for working through a task list. The work prompt is self-directing — it reads project state to pick the next task each time.</p>
 
-      <pre><code>cook "Work on the next task in plan.md" ralph "DONE if all tasks complete, else NEXT"
-cook "Work on the next task in plan.md" ralph 5 "DONE if all tasks complete, else NEXT"</code></pre>
+      <pre><code>cook <span class="str">"Work on the next task in plan.md"</span> ralph <span class="str">"DONE if all tasks complete, else NEXT"</span>
+cook <span class="str">"Work on the next task in plan.md"</span> ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span></code></pre>
 
       <p>Ralph with repeat and review:</p>
 
       <pre><code><span class="comment"># x3 passes per task, then ralph advances</span>
-cook "Work on the next task in plan.md" x3 \
-     ralph 5 "DONE if all tasks complete, else NEXT"
+cook <span class="str">"Work on the next task in plan.md"</span> x3 \
+     ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span>
 
 <span class="comment"># review gate per task, then ralph advances</span>
-cook "Work on the next task in plan.md" \
-     review "Code review" "DONE if no High issues, else ITERATE" \
-     ralph 5 "DONE if all tasks complete, else NEXT"</code></pre>
+cook <span class="str">"Work on the next task in plan.md"</span> \
+     review <span class="str">"Code review"</span> <span class="str">"DONE if no High issues, else ITERATE"</span> \
+     ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span></code></pre>
 
       <p>The review gate decides <strong>DONE</strong> (pass to ralph) or <strong>ITERATE</strong> (fix and retry). The ralph gate decides <strong>DONE</strong> (exit) or <strong>NEXT</strong> (advance to next task, reset iterations).</p>
     </section>
@@ -657,29 +658,29 @@ cook "Work on the next task in plan.md" \
       <h3>versions (vN / race N)</h3>
       <p><code>vN</code> runs N identical cooks in parallel worktrees. <code>pick</code> is the default resolver.</p>
 
-      <pre><code>cook "Add dark mode" v3                       <span class="comment"># 3 runs, pick the best</span>
-cook "Add dark mode" v3 "least code wins"     <span class="comment"># with pick criteria</span>
-cook "Add dark mode" race 3 "least code wins" <span class="comment"># long-form alias</span></code></pre>
+      <pre><code>cook <span class="str">"Add dark mode"</span> v3                       <span class="comment"># 3 runs, pick the best</span>
+cook <span class="str">"Add dark mode"</span> v3 <span class="str">"least code wins"</span>     <span class="comment"># with pick criteria</span>
+cook <span class="str">"Add dark mode"</span> race 3 <span class="str">"least code wins"</span> <span class="comment"># long-form alias</span></code></pre>
 
       <p>Composes with loop operators:</p>
 
-      <pre><code>cook "Add dark mode" review v3 "cleanest"      <span class="comment"># race 3, each with a review loop</span>
-cook "Add dark mode" x3 v3 "most complete"     <span class="comment"># race 3, each with 3 passes</span>
+      <pre><code>cook <span class="str">"Add dark mode"</span> review v3 <span class="str">"cleanest"</span>      <span class="comment"># race 3, each with a review loop</span>
+cook <span class="str">"Add dark mode"</span> x3 v3 <span class="str">"most complete"</span>     <span class="comment"># race 3, each with 3 passes</span>
 
 <span class="comment"># Race 3 complete ralph-with-review runs</span>
-cook "Work on next task in plan.md" review \
-     ralph 5 "DONE if all tasks done, else NEXT" \
-     v3 "most complete"</code></pre>
+cook <span class="str">"Work on next task in plan.md"</span> review \
+     ralph 5 <span class="str">"DONE if all tasks done, else NEXT"</span> \
+     v3 <span class="str">"most complete"</span></code></pre>
 
       <h3>vs</h3>
       <p><code>vs</code> runs two or more different cooks in parallel worktrees. Each branch is a full cook — it can have its own loop operators.</p>
 
-      <pre><code>cook "Implement auth with JWT" vs "Implement auth with sessions" pick "best security"
+      <pre><code>cook <span class="str">"Implement auth with JWT"</span> vs <span class="str">"Implement auth with sessions"</span> pick <span class="str">"best security"</span>
 
-cook "Build with React" review "Check accessibility" "DONE if WCAG AA" 3 \
+cook <span class="str">"Build with React"</span> review <span class="str">"Check accessibility"</span> <span class="str">"DONE if WCAG AA"</span> 3 \
   vs \
-  "Build with Vue" review "Check bundle size" "DONE if under 50kb" 5 \
-  merge "best developer experience"</code></pre>
+  <span class="str">"Build with Vue"</span> review <span class="str">"Check bundle size"</span> <span class="str">"DONE if under 50kb"</span> 5 \
+  merge <span class="str">"best developer experience"</span></code></pre>
 
       <h3>Resolvers</h3>
       <p>Resolvers determine the outcome of a <code>vN</code>, <code>race N</code>, or <code>vs</code> composition.</p>
@@ -707,13 +708,13 @@ cook "Build with React" review "Check accessibility" "DONE if WCAG AA" 3 \
         </tbody>
       </table>
 
-      <pre><code>cook "Approach A" vs "Approach B" pick "fewest lines changed"
-cook "Approach A" vs "Approach B" merge "cleanest implementation"
-cook "Approach A" vs "Approach B" compare</code></pre>
+      <pre><code>cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</span> pick <span class="str">"fewest lines changed"</span>
+cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</span> merge <span class="str">"cleanest implementation"</span>
+cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</span> compare</code></pre>
 
       <p>After a resolver, the result can be versioned again:</p>
 
-      <pre><code>cook "A" vs "B" pick "cleanest" v3 pick "most thorough"
+      <pre><code>cook <span class="str">"A"</span> vs <span class="str">"B"</span> pick <span class="str">"cleanest"</span> v3 pick <span class="str">"most thorough"</span>
 <span class="comment"># runs 3 independent vs instances, picks the best of the 3 winners</span></code></pre>
     </section>
 
