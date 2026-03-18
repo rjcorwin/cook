@@ -521,11 +521,13 @@
     <div class="pixel-divider"></div>
 
     <section class="section reveal">
-      <pre><code>cook <span class="str">"Implement dark mode"</span> review                         <span class="comment"># review loop, default prompts</span>
+      <pre><code><span class="comment"># review loop, default prompts</span>
+cook <span class="str">"Implement dark mode"</span> review
 
+<span class="comment"># custom review + gate prompts</span>
 cook <span class="str">"Implement dark mode"</span> \
-     <span class="str">"Review the implementation"</span> \                        <span class="comment"># review prompt</span>
-     <span class="str">"DONE if no High issues, else ITERATE"</span>               <span class="comment"># gate prompt</span></code></pre>
+     <span class="str">"Review the implementation"</span> \
+     <span class="str">"DONE if no High issues, else ITERATE"</span></code></pre>
 
       <p>By default, <span class="accent-glow">cook uses your local Claude Code instance</span> for all the work, but you can also use codex or opencode.</p>
 
