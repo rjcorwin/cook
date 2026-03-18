@@ -65,4 +65,42 @@ cook "Approach A" vs "Approach B" pick "cleanest" v3 pick "most thorough"
 # Doctor with agent/model flags
 cook doctor --agent codex
 cook doctor --work-agent claude --gate-agent codex
+
+# Long-form keyword aliases
+cook "Write one word" repeat 3           # equivalent to x3
+cook "Write one word" race 3 pick        # equivalent to v3 pick
+
+# No-op shorthands
+cook "Write one word" v1                 # equivalent to plain work call
+
+# Implicit max-iterations (bare number after work)
+cook "Write one word" 2                  # review loop with maxIterations=2, default prompts
+
+# Double nesting
+cook "Write one word" x2 review x2      # (work×2 → review)×2
+
+# vs with per-branch operators
+cook "Write yes" x2 vs "Write no" review pick   # branch A repeats, branch B has review
+
+# vs with 3+ branches
+cook "Write yes" vs "Write no" vs "Write maybe" pick
+
+# merge resolver
+cook "Write yes" vs "Write no" merge "pick the more agreeable word"
+
+# ralph actually running (not just parse validation)
+cook "Write one word" ralph 3 "Say DONE"
+
+# ralph with review
+cook "Write one word" review --max-iterations 1 ralph 2 "Say DONE"
+
+# --hide-request flag (prompt panel should be absent)
+cook "Write one word" --hide-request --sandbox none
+
+# Session log shared across steps (all steps write to same log file)
+cook "Write one word" review --max-iterations 1 --sandbox none
+# verify: only one log file created, all step outputs in it
+
+# --iterate prompt override
+cook "Write one word" review --iterate "Write a different word" --max-iterations 2 --sandbox none
 ```
