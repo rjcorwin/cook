@@ -540,10 +540,13 @@ cook <span class="str">"Implement dark mode"</span> --agent codex</code></pre>
 cook <span class="str">"Implement dark mode"</span> x3
 
 <span class="comment"># Race 3 versions in parallel, pick the best</span>
-cook <span class="str">"Implement dark mode"</span> v3 <span class="str">"least code, cleanest implementation"</span>
+cook <span class="str">"Implement dark mode"</span> \
+     v3 <span class="str">"least code, cleanest implementation"</span>
 
 <span class="comment"># Two different approaches, pick the winner</span>
-cook <span class="str">"Auth with JWT"</span> vs <span class="str">"Auth with sessions"</span> pick <span class="str">"best security"</span>
+cook <span class="str">"Auth with JWT"</span> \
+  vs <span class="str">"Auth with sessions"</span> \
+  pick <span class="str">"best security"</span>
 
 <span class="comment"># Work through a task list with a review gate on each task</span>
 cook <span class="str">"Work on the next task in plan.md"</span> review \
