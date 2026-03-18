@@ -7,7 +7,6 @@ import readline from 'readline'
 import type { AgentName, CookConfig, StepName, StepSelection } from './config.js'
 import { RunnerPool, type SandboxMode } from './runner.js'
 import { NativeRunner } from './native-runner.js'
-import { BareRunner } from './bare-runner.js'
 import { loadDockerConfig } from './config.js'
 
 export interface RunResult {
@@ -69,8 +68,6 @@ export function createRunnerPool(worktreePath: string, config: CookConfig, runAg
         const dockerConfig = loadDockerConfig(worktreePath)
         return startSandbox(new Docker(), worktreePath, config.env, dockerConfig, runAgents)
       }
-      case 'none':
-        return new BareRunner(worktreePath, config.env)
     }
   })
 }

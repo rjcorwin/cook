@@ -77,8 +77,7 @@ git init
 cook init
 cook "Create a simple todo app as a single index.html file. It should support: \
   add a task, mark complete, delete, and filter by status (all/active/done). \
-  No dependencies — vanilla JS only." --sandbox none
-```
+  No dependencies — vanilla JS only."```
 
 Verify `index.html` exists before proceeding with the test.
 

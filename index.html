@@ -753,7 +753,7 @@ cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</sp
 
     <h2 class="reveal">* Sandbox Modes</h2>
     <section class="section reveal">
-      <p>Cook supports three sandbox modes via <code>--sandbox</code>:</p>
+      <p>Cook supports two sandbox modes via <code>--sandbox</code>:</p>
 
       <table>
         <thead>
@@ -773,11 +773,6 @@ cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</sp
             <td><strong>Docker</strong></td>
             <td><code>--sandbox docker</code></td>
             <td>Runs agents inside a Docker container with network restrictions. Full isolation.</td>
-          </tr>
-          <tr>
-            <td><strong>None</strong></td>
-            <td><code>--sandbox none</code></td>
-            <td>Spawns agents natively with all safety bypassed (<code>--dangerously-skip-permissions</code> etc.). Use with caution.</td>
           </tr>
         </tbody>
       </table>

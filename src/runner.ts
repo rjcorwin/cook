@@ -10,7 +10,7 @@ export interface AgentRunner {
   stop(): Promise<void>
 }
 
-export type SandboxMode = 'agent' | 'docker' | 'none'
+export type SandboxMode = 'agent' | 'docker'
 
 export class RunnerPool {
   private runners = new Map<SandboxMode, AgentRunner>()

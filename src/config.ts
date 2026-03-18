@@ -44,7 +44,7 @@ function isAgentName(value: unknown): value is AgentName {
 }
 
 function isSandboxMode(value: unknown): value is SandboxMode {
-  return value === 'agent' || value === 'docker' || value === 'none'
+  return value === 'agent' || value === 'docker'
 }
 
 function parseStepAgentConfig(value: unknown): StepAgentConfig {
@@ -95,7 +95,13 @@ export function loadConfig(projectRoot: string): CookConfig {
       iterate: parseStepAgentConfig(parsed.steps?.iterate),
       ralph: parseStepAgentConfig(parsed.steps?.ralph),
     }
-    const sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
+    let sandbox: SandboxMode
+    if (parsed.sandbox === 'none') {
+      logWarn('sandbox: "none" is no longer supported, using "agent"')
+      sandbox = 'agent'
+    } else {
+      sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
+    }
     return { sandbox, env, animation, agent, model, steps }
   } catch (err) {
     logWarn(`Malformed .cook/config.json: ${err}`)

@@ -91,7 +91,7 @@ ${BOLD}Options:${RESET}
   --gate-model MODEL              Gate step model override
   --iterate-model MODEL           Iterate step model override
   --ralph-model MODEL             Ralph gate step model override
-  --sandbox MODE                  Sandbox mode (agent|docker|none, default: agent)
+  --sandbox MODE                  Sandbox mode (agent|docker, default: agent)
   --hide-request                  Hide the templated request for each step
   -h, --help                      Show this help`)
   process.exit(1)
@@ -339,7 +339,7 @@ async function cmdDoctor(args: string[]): Promise<void> {
     }
   }
 
-  if (usedModes.has('agent') || usedModes.has('none')) {
+  if (usedModes.has('agent')) {
     for (const agent of plan.runAgents) {
       if (agent === 'opencode') continue
       try {

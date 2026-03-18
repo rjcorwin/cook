@@ -245,13 +245,12 @@ Runs 3 independent `vs` instances, then picks the best of the 3 winners.
 
 ## Sandbox modes
 
-Cook supports three sandbox modes via `--sandbox`:
+Cook supports two sandbox modes via `--sandbox`:
 
 | Mode | Flag | Description |
 |------|------|-------------|
 | **Agent** (default) | `--sandbox agent` | Spawns agents natively. Agents use their own OS-level sandboxes (Claude's Seatbelt/Landlock, Codex's workspace sandbox). No Docker required. |
 | **Docker** | `--sandbox docker` | Runs agents inside a Docker container with network restrictions. Full isolation. |
-| **None** | `--sandbox none` | Spawns agents natively with all safety bypassed (`--dangerously-skip-permissions` etc.). Use with caution. |
 
 You can also set the sandbox mode per-step in `.cook/config.json` (see Configuration below).
 
@@ -362,7 +361,7 @@ Backticks and bare `$` in your `COOK.md` are escaped automatically. To emit a li
 --max-iterations N      Max review iterations (default: 3)
 --agent AGENT           Default agent (claude|codex|opencode)
 --model MODEL           Default model
---sandbox MODE          Sandbox mode (agent|docker|none, default: agent)
+--sandbox MODE          Sandbox mode (agent|docker, default: agent)
 --work-agent AGENT      Work step agent override
 --review-agent AGENT    Review step agent override
 --gate-agent AGENT      Gate step agent override

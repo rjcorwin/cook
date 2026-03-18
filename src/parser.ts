@@ -93,7 +93,7 @@ export function separateFlags(args: string[]): { flags: Record<string, string>; 
 
 export function buildParsedFlags(flags: Record<string, string>): ParsedFlags {
   const sandboxFlag = flags['--sandbox']
-  const sandbox = (sandboxFlag === 'agent' || sandboxFlag === 'docker' || sandboxFlag === 'none') ? sandboxFlag : undefined
+  const sandbox = (sandboxFlag === 'agent' || sandboxFlag === 'docker') ? sandboxFlag : undefined
 
   return {
     work: flags['--work'],
