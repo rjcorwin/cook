@@ -685,7 +685,10 @@ cook <span class="str">"Work on next task in plan.md"</span> review \
       <h3>vs</h3>
       <p><code>vs</code> runs two or more different cooks in parallel worktrees. Each branch is a full cook — it can have its own loop operators.</p>
 
-      <pre><code>cook <span class="str">"Implement auth with JWT"</span> vs <span class="str">"Implement auth with sessions"</span> pick <span class="str">"best security"</span>
+      <pre><code>cook <span class="str">"Implement auth with JWT"</span> \
+  vs \
+  <span class="str">"Implement auth with sessions"</span> \
+  pick <span class="str">"best security"</span>
 
 cook <span class="str">"Build with React"</span> review <span class="str">"Check accessibility"</span> <span class="str">"DONE if WCAG AA"</span> 3 \
   vs \
