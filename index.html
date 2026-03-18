@@ -508,7 +508,7 @@
       <div class="sprite-row">~*~ ~*~ ~*~</div>
       <h1><span class="let-it">Let it </span><span class="dot">cook</span><span class="period">.</span></h1>
       <p class="tagline">
-        Reviewing your coding agent's first pass is often a waste of your time. Cook puts your preferred agent in a <strong>review loop</strong> and doesn't let it finish until it's actually done.
+        An agent loop for your coding agent. <strong>Review loops</strong>, <strong>repeat passes</strong>, <strong>parallel races</strong>, and <strong>task-list orchestration</strong> — composable primitives that let your agent finish the job.
       </p>
       <div class="install-bar" title="Click to copy" onclick="(function(el){try{if(navigator.clipboard){navigator.clipboard.writeText('npm install -g @let-it-cook/cli').then(function(){el.style.borderColor='var(--green)';el.style.color='var(--green)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}).catch(function(){el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)})}else{el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}}catch(e){}})(this)">npm install -g @let-it-cook/cli</div>
       <p class="links">
@@ -528,13 +528,19 @@ cook "Implement dark mode" \
 
       <p>By default, <span class="accent-glow">cook uses your local Claude Code instance</span> for all the work, but you can also use codex or opencode.</p>
 
-      <pre><code>cook "Implement dark mode" --agent opencode --agent-model z-ai/glm-4.7
+      <pre><code>cook "Implement dark mode" --agent opencode --model glm-4.7
 cook "Implement dark mode" --agent codex</code></pre>
 
       <p>Build more complex workflows from composable primitives:</p>
 
-      <pre><code><span class="comment"># Race 3 versions in parallel, pick the best</span>
+      <pre><code><span class="comment"># Repeat 3 times, each pass refining the last</span>
+cook "Implement dark mode" x3
+
+<span class="comment"># Race 3 versions in parallel, pick the best</span>
 cook "Implement dark mode" v3 "least code, cleanest implementation"
+
+<span class="comment"># Two different approaches, pick the winner</span>
+cook "Auth with JWT" vs "Auth with sessions" pick "best security"
 
 <span class="comment"># Work through a task list with a review gate on each task</span>
 cook "Work on the next task in plan.md" review \
@@ -567,7 +573,7 @@ cook "Implement dark mode" review v3 "cleanest result"</code></pre>
 
       <pre><code>cook "work" x3 review          <span class="comment"># (work×3) → review loop</span>
 cook "work" review x3          <span class="comment"># (work → review loop) × 3</span>
-cook "work" review v3 pick     <span class="comment"># review loop, race 3, pick best</span></code></pre>
+cook "work" review v3 pick     <span class="comment"># race 3, each with a review loop</span></code></pre>
     </section>
 
     <h2 class="reveal">* Work</h2>
@@ -657,10 +663,10 @@ cook "Add dark mode" race 3 "least code wins" <span class="comment"># long-form 
 
       <p>Composes with loop operators:</p>
 
-      <pre><code>cook "Add dark mode" review v3 "cleanest"      <span class="comment"># review loop, then race 3</span>
-cook "Add dark mode" x3 v3 "most complete"     <span class="comment"># 3 passes each, race 3</span>
+      <pre><code>cook "Add dark mode" review v3 "cleanest"      <span class="comment"># race 3, each with a review loop</span>
+cook "Add dark mode" x3 v3 "most complete"     <span class="comment"># race 3, each with 3 passes</span>
 
-<span class="comment"># Race each task 3 ways as ralph advances</span>
+<span class="comment"># Race 3 complete ralph-with-review runs</span>
 cook "Work on next task in plan.md" review \
      ralph 5 "DONE if all tasks done, else NEXT" \
      v3 "most complete"</code></pre>
@@ -757,7 +763,6 @@ cook "Approach A" vs "Approach B" compare</code></pre>
       <ul>
         <li><code>COOK.md</code> — Project instructions and agent loop template</li>
         <li><code>.cook/config.json</code> — Default agent/model/sandbox, per-step overrides</li>
-        <li><code>.cook/docker.json</code> — Docker-only config: network mode and allowed hosts</li>
         <li><code>.cook/Dockerfile</code> — Project-specific dependencies (Docker mode only)</li>
         <li><code>.cook/logs/</code> — Session logs (gitignored)</li>
       </ul>
@@ -833,6 +838,14 @@ cook "Approach A" vs "Approach B" compare</code></pre>
           <tr>
             <td><code>${maxRalph}</code></td>
             <td>Max ralph tasks (ralph only)</td>
+          </tr>
+          <tr>
+            <td><code>${repeatPass}</code></td>
+            <td>Current repeat pass number (repeat only)</td>
+          </tr>
+          <tr>
+            <td><code>${maxRepeatPasses}</code></td>
+            <td>Total repeat passes (repeat only)</td>
           </tr>
           <tr>
             <td><code>${logFile}</code></td>
