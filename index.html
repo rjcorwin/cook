@@ -145,6 +145,7 @@
       color: var(--yellow);
       cursor: pointer;
       transition: transform 0.1s steps(1);
+      position: relative;
     }
 
     .install-bar:hover {
@@ -152,6 +153,17 @@
       box-shadow:
         inset 0 0 0 2px var(--orange),
         8px 8px 0 rgba(0, 0, 0, 0.4);
+    }
+
+    .install-bar:hover::after {
+      content: "click to copy";
+      position: absolute;
+      bottom: -2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.5rem;
+      color: var(--text-muted);
+      white-space: nowrap;
     }
 
     .install-bar:active {
