@@ -12,6 +12,7 @@ import { agentLoop, loopEvents, type LoopConfig, type LoopResult } from './loop.
 import { renderTemplate } from './template.js'
 import { loadCookMD } from './template.js'
 import { createSessionLog, appendToLog } from './log.js'
+import { parseRalphVerdict } from './verdict.js'
 import {
   sessionId,
   createWorktree,
@@ -94,6 +95,25 @@ on its own line, followed by a brief reason.
 
 DONE if: the work is complete and no High severity issues remain.
 ITERATE if: there are High severity issues or the work is incomplete.`
+
+function formatGatePrompt(prompt?: string): string {
+  if (!prompt) return DEFAULT_GATE_PROMPT
+  if (/respond with exactly done or iterate/i.test(prompt)) return prompt
+  return `Based on the review, decide whether to stop or continue.
+Respond with exactly DONE or ITERATE on its own line, followed by a brief reason.
+
+Criteria:
+${prompt}`
+}
+
+function formatRalphGatePrompt(prompt: string): string {
+  if (/respond with exactly (?:done or next|next or done)/i.test(prompt)) return prompt
+  return `Decide whether to advance to the next task or stop.
+Respond with exactly NEXT or DONE on its own line, followed by a brief reason.
+
+Criteria:
+${prompt}`
+}
 
 // --- Work: single agent call ---
 
@@ -217,7 +237,7 @@ async function executeReview(
       const loopConfig: LoopConfig = {
         workPrompt: iteratePrompt,
         reviewPrompt: node.reviewPrompt ?? DEFAULT_REVIEW_PROMPT,
-        gatePrompt: node.gatePrompt ?? DEFAULT_GATE_PROMPT,
+        gatePrompt: formatGatePrompt(node.gatePrompt),
         iteratePrompt: node.iteratePrompt,
         steps: ctx.stepConfig,
         maxIterations: node.maxIterations,
@@ -263,7 +283,7 @@ async function executeReview(
     const loopConfig: LoopConfig = {
       workPrompt,
       reviewPrompt: node.reviewPrompt ?? DEFAULT_REVIEW_PROMPT,
-      gatePrompt: node.gatePrompt ?? DEFAULT_GATE_PROMPT,
+      gatePrompt: formatGatePrompt(node.gatePrompt),
       iteratePrompt: node.iteratePrompt,
       steps: ctx.stepConfig,
       maxIterations: node.maxIterations,
@@ -329,7 +349,7 @@ async function executeRalph(
 
       const prompt = renderTemplate(ctx.cookMD, {
         step: 'ralph',
-        prompt: node.gatePrompt,
+        prompt: formatRalphGatePrompt(node.gatePrompt),
         lastMessage: result.lastMessage,
         iteration: task,
         maxIterations: node.maxTasks,
@@ -346,7 +366,7 @@ async function executeRalph(
       })
 
       // Parse ralph verdict: NEXT or DONE
-      const verdict = parseRalphVerdict(output)
+      const verdict = parseRalphVerdictOrFallback(output)
       if (verdict === 'DONE') {
         logOK(`Ralph: DONE after ${task} tasks`)
         return { ...result, lastMessage: output }
@@ -362,15 +382,9 @@ async function executeRalph(
   }
 }
 
-const NEXT_KEYWORDS = ['NEXT', 'CONTINUE']
-const RALPH_DONE_KEYWORDS = ['DONE', 'COMPLETE', 'FINISHED']
-
-function parseRalphVerdict(output: string): 'NEXT' | 'DONE' {
-  for (const line of output.split('\n')) {
-    const upper = line.trim().toUpperCase()
-    if (RALPH_DONE_KEYWORDS.some(kw => upper.includes(kw))) return 'DONE'
-    if (NEXT_KEYWORDS.some(kw => upper.includes(kw))) return 'NEXT'
-  }
+function parseRalphVerdictOrFallback(output: string): 'NEXT' | 'DONE' {
+  const verdict = parseRalphVerdict(output)
+  if (verdict) return verdict
   logWarn('Ralph gate: no NEXT/DONE verdict found in output — defaulting to DONE (fail-safe)')
   return 'DONE'
 }
@@ -611,7 +625,7 @@ async function executeBranchForComposition(
       const loopConfig: LoopConfig = {
         workPrompt,
         reviewPrompt: node.reviewPrompt ?? DEFAULT_REVIEW_PROMPT,
-        gatePrompt: node.gatePrompt ?? DEFAULT_GATE_PROMPT,
+        gatePrompt: formatGatePrompt(node.gatePrompt),
         iteratePrompt: node.iteratePrompt,
         steps: ctx.stepConfig,
         maxIterations: node.maxIterations,
@@ -666,7 +680,7 @@ async function executeBranchForComposition(
         const ralphStepConfig = ctx.stepConfig.ralph?.agent ? ctx.stepConfig.ralph : ctx.stepConfig.gate
         const prompt = renderTemplate(ctx.cookMD, {
           step: 'ralph',
-          prompt: node.gatePrompt,
+          prompt: formatRalphGatePrompt(node.gatePrompt),
           lastMessage: result.lastMessage,
           iteration: task,
           maxIterations: node.maxTasks,
@@ -682,7 +696,7 @@ async function executeBranchForComposition(
           console.error(`  ${line}`)
         })
 
-        const verdict = parseRalphVerdict(output)
+        const verdict = parseRalphVerdictOrFallback(output)
         if (verdict === 'DONE') {
           return { ...result, lastMessage: output }
         }
@@ -813,7 +827,7 @@ async function resolveMerge(
   const mergeLoopConfig: LoopConfig = {
     workPrompt: mergeWorkPrompt,
     reviewPrompt: DEFAULT_REVIEW_PROMPT,
-    gatePrompt: DEFAULT_GATE_PROMPT,
+    gatePrompt: formatGatePrompt(),
     steps: ctx.stepConfig,
     maxIterations: 3,
     projectRoot: mergeWt.worktreePath,

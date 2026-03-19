@@ -3,6 +3,7 @@ import type { AgentRunner, SandboxMode } from './runner.js'
 import { renderTemplate, type LoopContext } from './template.js'
 import { createSessionLog, appendToLog, logOK, logWarn } from './log.js'
 import type { AgentName, StepName } from './config.js'
+import { parseGateVerdict } from './verdict.js'
 
 interface LoopStepConfig {
   agent: AgentName
@@ -36,17 +37,7 @@ export interface LoopResult {
   logFile: string
 }
 
-const DONE_KEYWORDS = ['DONE', 'PASS', 'COMPLETE', 'APPROVE', 'ACCEPT']
-const ITERATE_KEYWORDS = ['ITERATE', 'REVISE', 'RETRY']
-
-export function parseGateVerdict(output: string): 'DONE' | 'ITERATE' {
-  for (const line of output.split('\n')) {
-    const upper = line.trim().toUpperCase()
-    if (DONE_KEYWORDS.some(kw => upper.includes(kw))) return 'DONE'
-    if (ITERATE_KEYWORDS.some(kw => upper.includes(kw))) return 'ITERATE'
-  }
-  return 'ITERATE'
-}
+export { parseGateVerdict } from './verdict.js'
 
 export const loopEvents = new EventEmitter()
 
@@ -62,8 +53,8 @@ export async function agentLoop(
   let lastMessage = config.initialLastMessage ?? ''
 
   for (let i = 1; i <= config.maxIterations; i++) {
-    // Iteration 1: work → review → gate (or just review → gate if skipFirstWork)
-    // Iteration 2+: iterate (or work) → review → gate
+    // Iteration 1: work -> review -> gate (or just review -> gate if skipFirstWork)
+    // Iteration 2+: iterate (or work) -> review -> gate
     const workStepName: StepName = (i > 1 && config.iteratePrompt) ? 'iterate' : 'work'
     const workPrompt = (i > 1 && config.iteratePrompt) ? config.iteratePrompt : config.workPrompt
 
@@ -122,17 +113,21 @@ export async function agentLoop(
       }
     }
 
-    const verdict = parseGateVerdict(lastMessage)
+    const parsedVerdict = parseGateVerdict(lastMessage)
+    const verdict = parsedVerdict ?? 'ITERATE'
+    if (!parsedVerdict) {
+      logWarn('Gate: no DONE/ITERATE verdict found in output -> defaulting to ITERATE')
+    }
     if (verdict === 'DONE') {
-      logOK('Gate: DONE — loop complete')
+      logOK('Gate: DONE -> loop complete')
       events.emit('done')
       return { verdict: 'DONE', iterations: i, lastMessage, logFile }
     }
     if (i < config.maxIterations) {
-      logWarn(`Gate: ITERATE — continuing to iteration ${i + 1}`)
+      logWarn(`Gate: ITERATE -> continuing to iteration ${i + 1}`)
     }
   }
-  logWarn(`Gate: max iterations (${config.maxIterations}) reached — stopping`)
+  logWarn(`Gate: max iterations (${config.maxIterations}) reached -> stopping`)
   events.emit('done')
   return { verdict: 'MAX_ITERATIONS', iterations: config.maxIterations, lastMessage, logFile }
 }
