@@ -1,6 +1,6 @@
 # cook
 
-A simple command for orchestrating agents.
+Workflow loops for Claude Code, Codex, and OpenCode.
 
 ```sh
 # review loop
