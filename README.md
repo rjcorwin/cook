@@ -67,6 +67,26 @@ cook "Add dark mode" "Review for accessibility" "DONE if WCAG AA, else ITERATE"
 cook "Add dark mode" review --work-agent codex --review-agent claude --review-model opus
 ```
 
+## Rate-limit recovery
+
+When an agent hits a token quota or rate limit, cook automatically waits and retries instead of bailing. A countdown is shown in the TUI. Enabled by default.
+
+```sh
+cook "Build the feature" review --no-wait   # disable: fail immediately on rate limit
+```
+
+Configure in `.cook/config.json`:
+
+```json
+{
+  "retry": {
+    "enabled": true,
+    "pollIntervalMinutes": 5,
+    "maxWaitMinutes": 360
+  }
+}
+```
+
 ## Configuration
 
 ```sh
