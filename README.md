@@ -1,6 +1,6 @@
 # cook
 
-Workflow loops for Claude Code, Codex, and OpenCode.
+A simple CLI for orchestrating Claude Code, Codex, and OpenCode.
 
 ```sh
 # review loop
