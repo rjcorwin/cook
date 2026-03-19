@@ -24,7 +24,7 @@ Two ways to get it:
 **Skill (no CLI)** — your agent orchestrates subagents directly:
 
 ```sh
-mkdir -p .claude/skills && cp -r no-code .claude/skills/cook
+mkdir -p .claude/skills/cook && curl -fsSL https://raw.githubusercontent.com/rjcorwin/cook/main/no-code/SKILL.md -o .claude/skills/cook/SKILL.md
 ```
 
 **CLI** — standalone tool for terminal or CI:
