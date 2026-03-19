@@ -5,13 +5,14 @@ import type { AnimationStyle } from '../config.js'
 
 export interface RunState {
   id: number
-  status: 'waiting' | 'running' | 'done' | 'error'
+  status: 'waiting' | 'running' | 'done' | 'error' | 'rate-limited'
   step: string
   iteration: number
   maxIterations: number
   startTime: number
   logFile: string
   error?: string
+  nextRetryAt?: Date
 }
 
 interface RaceAppProps {
@@ -44,6 +45,14 @@ const STATUS_COLORS: Record<string, string> = {
   running: 'yellow',
   done: 'green',
   error: 'red',
+  'rate-limited': '#ff8c00',
+}
+
+function formatCountdown(target: Date): string {
+  const remaining = Math.max(0, Math.ceil((target.getTime() - Date.now()) / 1000))
+  const m = Math.floor(remaining / 60)
+  const s = remaining % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export function RaceApp({ runCount, maxIterations, emitters, animation, title, runLabel = 'Run', runLabels }: RaceAppProps) {
@@ -87,17 +96,25 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
         updateRun(i, { step, iteration, status: 'running' })
       const onDone = () => updateRun(i, { status: 'done' })
       const onError = (err: string) => updateRun(i, { status: 'error', error: err })
+      const onWaiting = ({ nextRetryAt }: { nextRetryAt: Date }) =>
+        updateRun(i, { status: 'rate-limited', nextRetryAt })
+      const onRetry = () =>
+        updateRun(i, { status: 'running', nextRetryAt: undefined })
 
       em.on('logFile', onLogFile)
       em.on('step', onStep)
       em.on('done', onDone)
       em.on('error', onError)
+      em.on('waiting', onWaiting)
+      em.on('retry', onRetry)
 
       cleanups.push(() => {
         em.off('logFile', onLogFile)
         em.off('step', onStep)
         em.off('done', onDone)
         em.off('error', onError)
+        em.off('waiting', onWaiting)
+        em.off('retry', onRetry)
       })
     }
 
@@ -126,7 +143,9 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
           ? progressBar(run.iteration, run.maxIterations, run.step, barWidth)
           : '\u2591'.repeat(barWidth)
 
-        const stepLabel = run.status === 'done' || run.status === 'error' || !run.step
+        const stepLabel = run.status === 'rate-limited' && run.nextRetryAt
+          ? `retry in ${formatCountdown(run.nextRetryAt)}`
+          : run.status === 'done' || run.status === 'error' || !run.step
           ? ''
           : `${run.step} ${run.iteration}/${run.maxIterations}`
 

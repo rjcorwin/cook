@@ -35,6 +35,7 @@ export interface ParsedFlags {
   iterateModel?: string
   ralphModel?: string
   showRequest: boolean
+  noWait: boolean
 }
 
 // --- Reserved keywords and patterns ---
@@ -61,7 +62,7 @@ const VALUE_FLAGS = new Set([
   '--work-model', '--review-model', '--gate-model', '--iterate-model', '--ralph-model',
   '--max-iterations',
 ])
-const BOOLEAN_FLAGS = new Set(['--hide-request'])
+const BOOLEAN_FLAGS = new Set(['--hide-request', '--no-wait'])
 
 export function separateFlags(args: string[]): { flags: Record<string, string>; positional: string[] } {
   const flags: Record<string, string> = {}
@@ -115,6 +116,7 @@ export function buildParsedFlags(flags: Record<string, string>): ParsedFlags {
     iterateModel: flags['--iterate-model'],
     ralphModel: flags['--ralph-model'],
     showRequest: flags['--hide-request'] !== 'true',
+    noWait: flags['--no-wait'] === 'true',
   }
 }
 

@@ -3,6 +3,7 @@ import type { AgentRunner, SandboxMode } from './runner.js'
 import { renderTemplate, type LoopContext } from './template.js'
 import { createSessionLog, appendToLog, logOK, logWarn } from './log.js'
 import type { AgentName, StepName } from './config.js'
+import { retryOnRateLimit, type RetryConfig } from './retry.js'
 
 interface LoopStepConfig {
   agent: AgentName
@@ -22,6 +23,8 @@ export interface LoopConfig {
   initialLastMessage?: string
   // Skip the work step on iteration 1 (used when inner node already ran the work)
   skipFirstWork?: boolean
+  // Rate-limit retry config
+  retry: RetryConfig
   // Extra template context passed through from executor
   ralphIteration?: number
   maxRalph?: number
@@ -106,9 +109,14 @@ export async function agentLoop(
 
         events.emit('prompt', prompt)
         const runner = await getRunner(stepConfig.sandbox)
-        output = await runner.runAgent(stepConfig.agent, stepConfig.model, prompt, (line) => {
-          events.emit('line', line)
-        })
+        output = await retryOnRateLimit(
+          () => runner.runAgent(stepConfig.agent, stepConfig.model, prompt, (line) => {
+            events.emit('line', line)
+          }),
+          config.retry,
+          (info) => events.emit('waiting', info),
+          (info) => events.emit('retry', info),
+        )
       } catch (err) {
         events.emit('error', `${step.name} step failed (iteration ${i}): ${err}`)
         return { verdict: 'ITERATE', iterations: i, lastMessage, logFile }
