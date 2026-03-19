@@ -52,7 +52,7 @@ Cook is a vocabulary for describing agent workflows. You describe what you want,
 
 ```sh
 mkdir -p .claude/skills
-cp -r skill-pure .claude/skills/cook
+cp -r no-code .claude/skills/cook
 ```
 
 That's it. One file. Your agent now speaks cook. Tell it what you want in natural language and it will orchestrate subagents using review loops, parallel races, and task progression.
