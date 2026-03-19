@@ -374,3 +374,23 @@ Backticks and bare `$` in your `COOK.md` are escaped automatically. To emit a li
 --ralph-model MODEL
 --hide-request          Hide the templated request for each step
 ```
+
+---
+
+<details>
+<summary><sub>Or without the CLI at all.</sub></summary>
+
+<br>
+
+The primitives above — review loops, races, task progression — are patterns, not programs. An agent that understands them doesn't need a CLI to execute them.
+
+```sh
+mkdir -p .claude/skills
+cp -r skill-pure .claude/skills/cook
+```
+
+No npm. No Node. No process spawning. Just a file that teaches your agent to orchestrate itself.
+
+[`skill-pure/SKILL.md`](skill-pure/SKILL.md)
+
+</details>

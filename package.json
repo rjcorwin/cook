@@ -10,7 +10,8 @@
   },
   "files": [
     "dist",
-    "skill"
+    "skill",
+    "skill-pure"
   ],
   "scripts": {
     "build": "rm -rf dist && tsup"
