@@ -44,20 +44,35 @@ cook "Work on the next task in plan.md" review \
 cook "Implement dark mode" review v3 "cleanest result"
 ```
 
-## Install
+## Two ways to cook
+
+### Skill (experimental)
+
+Cook is a vocabulary for describing agent workflows. You describe what you want, the agent confirms the plan using cook's primitives, you approve, the agent executes — no script, no CLI, no dependencies.
+
+```sh
+mkdir -p .claude/skills
+cp -r skill-pure .claude/skills/cook
+```
+
+That's it. One file. Your agent now speaks cook. Tell it what you want in natural language and it will orchestrate subagents using review loops, parallel races, and task progression.
+
+### CLI
+
+For a standalone tool you can run from your terminal or CI:
 
 ```sh
 npm install -g @let-it-cook/cli
 ```
 
-Run it yourself from the command line, or add the `/cook` skill to Claude Code so your agent can orchestrate its own subagent workflows:
+Add the `/cook` skill to Claude Code so your agent can invoke the CLI:
 
 ```sh
 mkdir -p .claude/skills
 cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook
 ```
 
-### Prerequisites
+#### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20+
 - An agent CLI on your PATH: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode)
@@ -375,22 +390,3 @@ Backticks and bare `$` in your `COOK.md` are escaped automatically. To emit a li
 --hide-request          Hide the templated request for each step
 ```
 
----
-
-<details>
-<summary><sub>Or without the CLI at all.</sub></summary>
-
-<br>
-
-The primitives above — review loops, races, task progression — are patterns, not programs. An agent that understands them doesn't need a CLI to execute them.
-
-```sh
-mkdir -p .claude/skills
-cp -r skill-pure .claude/skills/cook
-```
-
-No npm. No Node. No process spawning. Just a file that teaches your agent to orchestrate itself.
-
-[`skill-pure/SKILL.md`](skill-pure/SKILL.md)
-
-</details>
