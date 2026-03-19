@@ -92,6 +92,7 @@ ${BOLD}Options:${RESET}
   --iterate-model MODEL           Iterate step model override
   --ralph-model MODEL             Ralph gate step model override
   --sandbox MODE                  Sandbox mode (agent|docker, default: agent)
+  --no-wait                       Disable rate-limit retry (fail fast)
   --hide-request                  Hide the templated request for each step
   -h, --help                      Show this help`)
   process.exit(1)
@@ -419,6 +420,10 @@ async function main() {
         console.error(`\u2502 ${pad(line)} \u2502`)
       }
       console.error(`\u2514\u2500${'─'.repeat(maxLen)}\u2500\u2518`)
+
+      if (parsedFlags.noWait) {
+        config.retry.enabled = false
+      }
 
       const cookMD = loadCookMD(projectRoot)
 

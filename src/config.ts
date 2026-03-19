@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { logWarn } from './log.js'
 import type { SandboxMode } from './runner.js'
+import { DEFAULT_RETRY_CONFIG, type RetryConfig } from './retry.js'
 
 export type AnimationStyle = 'flame' | 'strip' | 'campfire' | 'pot' | 'pulse'
 export type AgentName = 'claude' | 'codex' | 'opencode'
@@ -20,6 +21,7 @@ export interface CookConfig {
   agent: AgentName
   model?: string
   steps: Record<StepName, StepAgentConfig>
+  retry: RetryConfig
 }
 
 export interface StepSelection {
@@ -70,6 +72,7 @@ export function loadConfig(projectRoot: string): CookConfig {
     animation: 'strip',
     agent: 'claude',
     steps: { work: {}, review: {}, gate: {}, iterate: {}, ralph: {} },
+    retry: { ...DEFAULT_RETRY_CONFIG },
   }
 
   const configPath = resolveConfigPath(projectRoot)
@@ -102,7 +105,17 @@ export function loadConfig(projectRoot: string): CookConfig {
     } else {
       sandbox = isSandboxMode(parsed.sandbox) ? parsed.sandbox : defaults.sandbox
     }
-    return { sandbox, env, animation, agent, model, steps }
+    const retry: RetryConfig = { ...DEFAULT_RETRY_CONFIG }
+    if (parsed.retry && typeof parsed.retry === 'object') {
+      if (parsed.retry.enabled === false) retry.enabled = false
+      if (typeof parsed.retry.pollIntervalMinutes === 'number' && parsed.retry.pollIntervalMinutes > 0) {
+        retry.pollIntervalMs = parsed.retry.pollIntervalMinutes * 60 * 1000
+      }
+      if (typeof parsed.retry.maxWaitMinutes === 'number' && parsed.retry.maxWaitMinutes > 0) {
+        retry.maxWaitMs = parsed.retry.maxWaitMinutes * 60 * 1000
+      }
+    }
+    return { sandbox, env, animation, agent, model, steps, retry }
   } catch (err) {
     logWarn(`Malformed .cook/config.json: ${err}`)
     return defaults

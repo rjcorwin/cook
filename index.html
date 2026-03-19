@@ -751,6 +751,20 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
       <blockquote>
         <p><strong>Note:</strong> OpenCode is only supported in Docker mode.</p>
       </blockquote>
+
+      <h3>Rate-limit recovery</h3>
+      <p>When an agent hits a token quota or rate limit, cook automatically waits and retries instead of bailing. A countdown is shown in the TUI. Enabled by default.</p>
+
+      <pre><code>cook <span class="str">"Build the feature"</span> review --no-wait   <span class="comment"># disable: fail fast</span></code></pre>
+
+      <p>Configure wait behavior in <code>.cook/config.json</code>:</p>
+      <pre><code>{
+  "retry": {
+    "enabled": true,
+    "pollIntervalMinutes": 5,
+    "maxWaitMinutes": 360
+  }
+}</code></pre>
     </section>
 
     <footer>

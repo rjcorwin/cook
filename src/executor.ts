@@ -22,6 +22,7 @@ import {
   confirm,
   type RunResult,
 } from './race.js'
+import { retryOnRateLimit } from './retry.js'
 import { logPhase, logStep, logOK, logWarn, logErr } from './log.js'
 import { RaceApp } from './ui/RaceApp.js'
 import { App } from './ui/App.js'
@@ -139,9 +140,14 @@ async function executeWork(node: { type: 'work'; prompt: string }, ctx: Executio
 
     loopEvents.emit('prompt', prompt)
     const runner = await pool.get(ctx.stepConfig.work.sandbox)
-    const output = await runner.runAgent(ctx.stepConfig.work.agent, ctx.stepConfig.work.model, prompt, (line) => {
-      loopEvents.emit('line', line)
-    })
+    const output = await retryOnRateLimit(
+      () => runner.runAgent(ctx.stepConfig.work.agent, ctx.stepConfig.work.model, prompt, (line) => {
+        loopEvents.emit('line', line)
+      }),
+      ctx.config.retry,
+      (info) => loopEvents.emit('waiting', info),
+      (info) => loopEvents.emit('retry', info),
+    )
 
     try {
       appendToLog(logFile, 'work', 1, output)
@@ -224,6 +230,7 @@ async function executeReview(
         projectRoot: ctx.projectRoot,
         initialLastMessage: innerResult.lastMessage,
         skipFirstWork: true,
+        retry: ctx.config.retry,
         ralphIteration: ctx.ralphIteration,
         maxRalph: ctx.maxRalph,
         repeatPass: ctx.repeatPass,
@@ -268,6 +275,7 @@ async function executeReview(
       steps: ctx.stepConfig,
       maxIterations: node.maxIterations,
       projectRoot: ctx.projectRoot,
+      retry: ctx.config.retry,
       ralphIteration: ctx.ralphIteration,
       maxRalph: ctx.maxRalph,
       repeatPass: ctx.repeatPass,
@@ -341,9 +349,14 @@ async function executeRalph(
       })
 
       const runner = await pool.get(ralphStepConfig.sandbox)
-      const output = await runner.runAgent(ralphStepConfig.agent, ralphStepConfig.model, prompt, (line) => {
-        console.error(`  ${line}`)
-      })
+      const output = await retryOnRateLimit(
+        () => runner.runAgent(ralphStepConfig.agent, ralphStepConfig.model, prompt, (line) => {
+          console.error(`  ${line}`)
+        }),
+        ctx.config.retry,
+        (info) => loopEvents.emit('waiting', info),
+        (info) => loopEvents.emit('retry', info),
+      )
 
       // Parse ralph verdict: NEXT or DONE
       const verdict = parseRalphVerdict(output)
@@ -587,9 +600,14 @@ async function executeBranchForComposition(
 
       emitter.emit('prompt', prompt)
       const runner = await pool.get(ctx.stepConfig.work.sandbox)
-      const output = await runner.runAgent(ctx.stepConfig.work.agent, ctx.stepConfig.work.model, prompt, (line) => {
-        emitter.emit('line', line)
-      })
+      const output = await retryOnRateLimit(
+        () => runner.runAgent(ctx.stepConfig.work.agent, ctx.stepConfig.work.model, prompt, (line) => {
+          emitter.emit('line', line)
+        }),
+        ctx.config.retry,
+        (info) => emitter.emit('waiting', info),
+        (info) => emitter.emit('retry', info),
+      )
 
       try { appendToLog(logFile, 'work', 1, output) } catch { /* ok */ }
       emitter.emit('done')
@@ -618,6 +636,7 @@ async function executeBranchForComposition(
         projectRoot: ctx.projectRoot,
         initialLastMessage: ctx.lastMessage,
         skipFirstWork: node.inner.type !== 'work',
+        retry: ctx.config.retry,
         ralphIteration: ctx.ralphIteration,
         maxRalph: ctx.maxRalph,
         repeatPass: ctx.repeatPass,
@@ -678,9 +697,14 @@ async function executeBranchForComposition(
         })
 
         const runner = await pool.get(ralphStepConfig.sandbox)
-        const output = await runner.runAgent(ralphStepConfig.agent, ralphStepConfig.model, prompt, (line) => {
-          console.error(`  ${line}`)
-        })
+        const output = await retryOnRateLimit(
+          () => runner.runAgent(ralphStepConfig.agent, ralphStepConfig.model, prompt, (line) => {
+            console.error(`  ${line}`)
+          }),
+          ctx.config.retry,
+          (info) => emitter.emit('waiting', info),
+          (info) => emitter.emit('retry', info),
+        )
 
         const verdict = parseRalphVerdict(output)
         if (verdict === 'DONE') {
@@ -723,9 +747,12 @@ async function resolvePick(
   let judgeOutput: string
   try {
     const runner = await pool.get(gateStep.sandbox)
-    judgeOutput = await runner.runAgent(gateStep.agent, gateStep.model, judgePrompt, (line) => {
-      console.error(`  ${line}`)
-    })
+    judgeOutput = await retryOnRateLimit(
+      () => runner.runAgent(gateStep.agent, gateStep.model, judgePrompt, (line) => {
+        console.error(`  ${line}`)
+      }),
+      ctx.config.retry,
+    )
   } catch (err) {
     logErr(`Pick failed: ${err}`)
     logWarn('You can manually compare branches and merge the winner.')
@@ -817,6 +844,7 @@ async function resolveMerge(
     steps: ctx.stepConfig,
     maxIterations: 3,
     projectRoot: mergeWt.worktreePath,
+    retry: ctx.config.retry,
     ralphIteration: ctx.ralphIteration,
     maxRalph: ctx.maxRalph,
     repeatPass: ctx.repeatPass,
@@ -923,9 +951,12 @@ ${contextParts.join('\n\n')}`
   let compareOutput: string
   try {
     const runner = await pool.get(gateStep.sandbox)
-    compareOutput = await runner.runAgent(gateStep.agent, gateStep.model, comparePrompt, (line) => {
-      console.error(`  ${line}`)
-    })
+    compareOutput = await retryOnRateLimit(
+      () => runner.runAgent(gateStep.agent, gateStep.model, comparePrompt, (line) => {
+        console.error(`  ${line}`)
+      }),
+      ctx.config.retry,
+    )
   } catch (err) {
     logErr(`Compare failed: ${err}`)
     await pool.stopAll()

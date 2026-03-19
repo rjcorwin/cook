@@ -15,6 +15,8 @@ interface AppState {
   active: boolean
   done: boolean
   error: string | null
+  waiting: boolean
+  nextRetryAt: Date | null
 }
 
 interface AppProps {
@@ -23,6 +25,13 @@ interface AppProps {
   model: string
   showRequest: boolean
   animation: AnimationStyle
+}
+
+function formatCountdown(target: Date): string {
+  const remaining = Math.max(0, Math.ceil((target.getTime() - Date.now()) / 1000))
+  const m = Math.floor(remaining / 60)
+  const s = remaining % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export function App({ maxIterations, agent, model, showRequest, animation }: AppProps) {
@@ -41,6 +50,8 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
     active: false,
     done: false,
     error: null,
+    waiting: false,
+    nextRetryAt: null,
   })
 
   useEffect(() => {
@@ -87,12 +98,26 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
         return { ...s, active: false, error: err }
       })
 
+    const onWaiting = ({ nextRetryAt }: { error: Error; nextRetryAt: Date; attempt: number }) =>
+      setState(s => {
+        itemsRef.current.push({ id: getId(), type: 'line', step: s.step, text: `Rate limited — waiting for retry...` })
+        return { ...s, waiting: true, nextRetryAt }
+      })
+
+    const onRetry = ({ attempt }: { attempt: number }) =>
+      setState(s => {
+        itemsRef.current.push({ id: getId(), type: 'line', step: s.step, text: `Retrying (attempt ${attempt})...` })
+        return { ...s, waiting: false, nextRetryAt: null }
+      })
+
     loopEvents.on('logFile', onLogFile)
     loopEvents.on('step', onStep)
     loopEvents.on('prompt', onPrompt)
     loopEvents.on('line', onLine)
     loopEvents.on('done', onDone)
     loopEvents.on('error', onError)
+    loopEvents.on('waiting', onWaiting)
+    loopEvents.on('retry', onRetry)
 
     return () => {
       loopEvents.off('logFile', onLogFile)
@@ -101,8 +126,17 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
       loopEvents.off('line', onLine)
       loopEvents.off('done', onDone)
       loopEvents.off('error', onError)
+      loopEvents.off('waiting', onWaiting)
+      loopEvents.off('retry', onRetry)
     }
   }, [showRequest])
+
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (!state.waiting) return
+    const timer = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(timer)
+  }, [state.waiting])
 
   useEffect(() => {
     if (state.done || state.error) exit()
@@ -122,6 +156,14 @@ export function App({ maxIterations, agent, model, showRequest, animation }: App
         logFile={state.logFile}
         animation={animation}
       />
+
+      {state.waiting && state.nextRetryAt && (
+        <Box marginTop={1}>
+          <Text color="yellow" bold>
+            Rate limited — retrying in {formatCountdown(state.nextRetryAt)}
+          </Text>
+        </Box>
+      )}
 
       {state.error && (
         <Box marginTop={1}>
