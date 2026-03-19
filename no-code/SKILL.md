@@ -24,13 +24,13 @@ cook "<work prompt>" [loop operators...] [composition operators...]
 - `ralph N "<gate prompt>"` — outer task-list progression
 
 **Composition operators** (parallel branches):
-- `vN` or `race N` — N identical branches in parallel worktrees
+- `vN` or `race N` — N identical branches in parallel
 - `vs` — separates different branch prompts
 - `pick ["<criteria>"]` — resolver: pick best (default)
 - `merge ["<criteria>"]` — resolver: synthesize all
 - `compare` — resolver: comparison doc, no merge
 
-**Operators compose left to right.** Loop operators wrap everything to their left.
+**Operators compose left to right.** Each wraps everything to its left.
 
 Examples:
 - `cook "Add dark mode" review` → work in review loop
@@ -41,114 +41,142 @@ Examples:
 - `cook "A" vs "B" pick "best"` → two approaches, pick winner
 - `cook "Next task in PLAN.md" ralph 5 "DONE if all done, else NEXT"` → task list
 
-## Execution patterns
+## Confirming the plan
 
-Parse the user's input, then execute the matching pattern below.
+Before executing, confirm the plan with the user. Example:
+
+```
+User: /cook "Implement dark mode" x3 review
+You:  Plan: 3 repeat passes, then a review loop (max 3 iterations).
+      Work prompt: "Implement dark mode"
+      Proceed?
+```
+
+Wait for user confirmation before executing.
+
+## Execution patterns
 
 ### Pattern: Work (no operators)
 
 Spawn a single subagent to do the work.
 
 ```
-Agent(prompt: "<work prompt>", description: "cook: work")
+Agent(prompt: "<work prompt>")
 ```
+
+Report what the subagent did.
 
 ### Pattern: Review loop
 
-Spawn a work subagent. Then spawn a review subagent to review the diff. Then spawn a gate subagent to decide DONE or ITERATE. If ITERATE, spawn another work subagent with the review feedback. Repeat up to max iterations.
+Iterate: work → review → gate. Stop on DONE or max iterations.
 
 ```
-iteration = 1
+iteration = 1, max = 3 (or user-specified N)
 loop:
-  1. work_agent = Agent(prompt: "<work prompt>" + previous feedback if any)
-  2. review_agent = Agent(prompt: "Review the changes in this project. <review prompt or default: 'Look for bugs, missing edge cases, and code quality issues. Rate severity: High/Medium/Low.'>")
-  3. gate_agent = Agent(prompt: "Based on this review:\n<review output>\n\n<gate prompt or default: 'Respond with exactly DONE or ITERATE. DONE if no High severity issues remain. ITERATE if there are High issues or the work is incomplete.'>")
-  4. if gate says DONE → stop
-  5. if gate says ITERATE and iteration < max → iteration++, go to 1 with review feedback
-  6. if iteration >= max → stop (max iterations reached)
+  1. Agent(prompt: "<work prompt>" + previous review feedback if any)
+  2. Agent(prompt: "Review the changes just made in this project.
+       <review prompt or default:
+       'Look for bugs, missing edge cases, and code quality issues.
+       Rate severity: High/Medium/Low.'>
+       Use git diff to see what changed.")
+  3. Parse the review. If no High severity issues → DONE. Stop.
+     If High issues and iteration < max → ITERATE with feedback.
+     If iteration >= max → stop (max iterations reached).
 ```
+
+For the gate decision, you make the call yourself based on the review output — no need for a separate gate subagent. Read the review, apply the gate criteria, decide DONE or ITERATE.
 
 ### Pattern: Repeat (xN)
 
-Spawn N sequential work subagents, each seeing the project state left by the previous one.
+Spawn N sequential work subagents. Each sees the project state left by the previous.
 
 ```
 for pass in 1..N:
-  Agent(prompt: "<work prompt>", description: "cook: repeat pass {pass}/{N}")
-```
-
-### Pattern: Review + Repeat
-
-Apply operators left to right. `x3 review` means: 3 repeat passes, then a review loop. `review x3` means: the review loop itself repeated 3 times.
-
-### Pattern: Race (vN)
-
-Spawn N subagents in **parallel**, each in an **isolated worktree**. Wait for all to complete. Then spawn a judge subagent to compare and pick.
-
-```
-# Launch all branches in parallel — use a single message with multiple Agent calls
-for i in 1..N:
-  Agent(
-    prompt: "<work prompt>",
-    isolation: "worktree",
-    description: "cook: race branch {i}/{N}"
-  )
-
-# After all complete, judge the results
-Agent(prompt: "Compare the changes made in these branches:\n<branch diffs>\n\nPick criteria: <criteria or 'best overall implementation'>\n\nRespond with: PICK <number>\n<reasoning>")
-
-# Merge the winning branch
-```
-
-IMPORTANT: Launch all race branches in a **single message** with multiple Agent tool calls so they run in parallel.
-
-### Pattern: vs (fork-join)
-
-Like race, but each branch has a **different prompt**.
-
-```
-# Launch branches in parallel with different prompts
-Agent(prompt: "<prompt A>", isolation: "worktree", description: "cook: vs branch 1")
-Agent(prompt: "<prompt B>", isolation: "worktree", description: "cook: vs branch 2")
-
-# Judge and resolve
+  Agent(prompt: "<work prompt>")
+  Report: "Pass {pass}/{N} complete."
 ```
 
 ### Pattern: Ralph (task-list progression)
 
-Execute the inner work pattern, then check if the task list is complete. If not, advance and repeat.
+Execute the inner pattern, then check if the task list is complete.
 
 ```
 for task in 1..maxTasks:
   1. Execute inner pattern (work, or work+review, etc.)
-  2. ralph_gate = Agent(prompt: "<ralph gate prompt>")
-  3. if gate says DONE → stop
-  4. if gate says NEXT → continue to next task
+  2. Agent(prompt: "<ralph gate prompt>")
+  3. Parse response: DONE → stop. NEXT → continue.
 ```
 
-### Resolvers
+### Pattern: Race (vN) and vs
 
-After parallel branches complete:
+Race N identical approaches or fork different approaches, then resolve.
 
-- **pick**: Judge selects one winner. Merge that branch's worktree.
-- **merge**: Judge creates a synthesis. Spawn a new subagent to implement the merged vision.
-- **compare**: Judge writes a comparison document to `.cook/compare-<timestamp>.md`. No merge.
+**Step 1: Create branches.** Use Bash to create git worktrees for each branch:
 
-## Subagent guidelines
+```sh
+# For each branch i:
+git branch cook-race-{session}-{i}
+git worktree add .cook/race/{session}/run-{i} cook-race-{session}-{i}
+```
 
-- Always use `isolation: "worktree"` for race/vs branches — this gives each branch a clean copy of the repo
-- Work subagents should be given the full work prompt, not a summary
-- Review subagents should examine the actual code changes (use `git diff`)
-- Gate subagents must output exactly `DONE` or `ITERATE` (or `NEXT` for ralph)
-- When merging a winning worktree branch, the Agent tool returns the worktree path and branch — use `git merge` to bring it in
+**Step 2: Run branches in parallel.** Spawn subagents simultaneously — each working in its own worktree directory:
+
+```
+# Launch ALL branches in a single message (parallel execution):
+Agent(prompt: "You are working in .cook/race/{session}/run-1. <work prompt>")
+Agent(prompt: "You are working in .cook/race/{session}/run-2. <work prompt>")
+Agent(prompt: "You are working in .cook/race/{session}/run-3. <work prompt>")
+```
+
+For `vs`, each branch gets a different prompt.
+
+IMPORTANT: Send all Agent calls in a **single message** so they run in parallel.
+
+**Step 3: Resolve.** After all branches complete:
+
+For `pick`:
+```
+# Get diffs from each branch
+git -C .cook/race/{session}/run-1 diff master
+git -C .cook/race/{session}/run-2 diff master
+# etc.
+
+# Judge: spawn agent to compare diffs and pick winner
+Agent(prompt: "Compare these implementations:\n\nBranch 1 diff:\n...\nBranch 2 diff:\n...\n\nCriteria: <criteria>\nRespond with PICK <number> and reasoning.")
+
+# Merge winner
+git merge cook-race-{session}-{winner}
+```
+
+For `merge`: spawn a subagent to synthesize the best parts of all branches into a new implementation.
+
+For `compare`: spawn a subagent to write a comparison doc. No merge.
+
+**Step 4: Clean up.**
+
+```sh
+# Remove worktrees and branches
+git worktree remove .cook/race/{session}/run-1
+git branch -D cook-race-{session}-1
+# etc.
+```
+
+### Composition: Operators compose
+
+`x3 review` → 3 repeat passes, then a review loop.
+`review x3` → the review loop repeated 3 times.
+`review v3 pick` → race 3 branches, each running a review loop.
+
+Apply left to right: each operator wraps the accumulated pattern so far.
 
 ## Status updates
 
-As you orchestrate, give the user brief status updates at natural milestones:
+Give brief updates at milestones:
 - "Starting review loop (max 3 iterations)"
-- "Iteration 1: work complete, launching review..."
-- "Gate: ITERATE — launching iteration 2"
+- "Iteration 1: work complete, reviewing..."
+- "Gate: ITERATE — starting iteration 2 with feedback"
 - "Gate: DONE — review loop complete"
-- "Racing 3 branches in parallel worktrees..."
-- "All branches complete. Judging..."
+- "Racing 3 branches..."
+- "All branches complete. Comparing diffs..."
 - "Picked branch 2. Merging..."
+- "Ralph task 1/5: complete. Gate: NEXT"
