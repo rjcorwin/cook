@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cook — Let it cook.</title>
+  <title>cook — a simple command for orchestrating agents</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -93,11 +93,7 @@
       display: inline-block;
     }
 
-    .hero h1 .let-it {
-      color: var(--text);
-    }
-
-    .hero h1 .dot {
+    .hero h1 .cook {
       color: var(--yellow);
       animation: colorCycle 4s steps(4) infinite;
     }
@@ -123,8 +119,13 @@
       font-size: 0.7rem;
       color: var(--text-muted);
       max-width: 640px;
-      margin: 1rem auto 2rem;
+      margin: 1rem auto;
       line-height: 2.2;
+    }
+
+    .hero pre {
+      text-align: left;
+      margin: 1.5rem 0;
     }
 
     .hero .tagline strong {
@@ -519,12 +520,31 @@
 
     <header class="hero">
       <div class="sprite-row">~*~ ~*~ ~*~</div>
-      <h1><span class="let-it">Let it </span><span class="dot">cook</span><span class="period">.</span></h1>
+      <h1><span class="cook">cook</span><span class="period">.</span></h1>
       <p class="tagline">
-        The <code>cook</code> command orchestrates <strong>Claude Code</strong>, <strong>Codex</strong>, and <strong>OpenCode</strong>. Review loops, repeat passes, parallel races, and task-list orchestration — composable primitives you can run yourself or add as a skill to turbo charge your agent's subagent workflows.
+        A simple command for orchestrating agents.
       </p>
+      <pre><code><span class="comment"># review loop</span>
+cook <span class="str">"Implement dark mode"</span> review
+
+<span class="comment"># 3 passes</span>
+cook <span class="str">"Implement dark mode"</span> x3
+
+<span class="comment"># race 3, pick best</span>
+cook <span class="str">"Implement dark mode"</span> v3 <span class="str">"least code"</span>
+
+<span class="comment"># two approaches, pick one</span>
+cook <span class="str">"Auth with JWT"</span> vs <span class="str">"Auth with sessions"</span> pick <span class="str">"best security"</span>
+
+<span class="comment"># task list</span>
+cook <span class="str">"Work on next task in plan.md"</span> review \
+     ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span>
+
+<span class="comment"># compose freely</span>
+cook <span class="str">"Implement dark mode"</span> review v3 <span class="str">"cleanest result"</span></code></pre>
+      <p class="tagline">Two ways to get it:</p>
       <div class="install-bar" title="Click to copy" onclick="(function(el){try{if(navigator.clipboard){navigator.clipboard.writeText('npm install -g @let-it-cook/cli').then(function(){el.style.borderColor='var(--green)';el.style.color='var(--green)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}).catch(function(){el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)})}else{el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}}catch(e){}})(this)">npm install -g @let-it-cook/cli</div>
-      <p class="tagline" style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Add the <code>/cook</code> skill to Claude Code:</p>
+      <p class="tagline">Add the <code>/cook</code> skill to Claude Code:</p>
       <div class="install-bar" title="Click to copy" onclick="(function(el){try{if(navigator.clipboard){navigator.clipboard.writeText('mkdir -p .claude/skills && cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook').then(function(){el.style.borderColor='var(--green)';el.style.color='var(--green)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}).catch(function(){el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)})}else{el.style.borderColor='var(--red)';el.style.color='var(--red)';setTimeout(function(){el.style.borderColor='var(--yellow)';el.style.color='var(--yellow)'},1500)}}catch(e){}})(this)" style="text-align: left; display: block;">mkdir -p .claude/skills && \<br>&nbsp;&nbsp;&nbsp;&nbsp;cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook</div>
       <p class="links">
         <a href="https://github.com/rjcorwin/cook">GitHub</a> &middot;
@@ -534,76 +554,30 @@
 
     <div class="pixel-divider"></div>
 
-    <section class="section reveal">
-      <pre><code><span class="comment"># review loop, default prompts</span>
-cook <span class="str">"Implement dark mode"</span> review
-
-<span class="comment"># custom review + gate prompts</span>
-cook <span class="str">"Implement dark mode"</span> \
-     <span class="str">"Review the implementation"</span> \
-     <span class="str">"DONE if no High issues, else ITERATE"</span></code></pre>
-
-      <p>By default, <span class="accent-glow">cook uses your local Claude Code instance</span> for all the work, but you can also use codex or opencode.</p>
-
-      <pre><code>cook <span class="str">"Implement dark mode"</span> --agent opencode --model glm-4.7
-cook <span class="str">"Implement dark mode"</span> --agent codex</code></pre>
-
-      <p>Build more complex workflows from composable primitives:</p>
-
-      <pre><code><span class="comment"># Repeat 3 times, each pass refining the last</span>
-cook <span class="str">"Implement dark mode"</span> x3
-
-<span class="comment"># Race 3 versions in parallel, pick the best</span>
-cook <span class="str">"Implement dark mode"</span> \
-     v3 <span class="str">"least code, cleanest implementation"</span>
-
-<span class="comment"># Two different approaches, pick the winner</span>
-cook <span class="str">"Auth with JWT"</span> \
-  vs <span class="str">"Auth with sessions"</span> \
-  pick <span class="str">"best security"</span>
-
-<span class="comment"># Work through a task list with a review gate on each task</span>
-cook <span class="str">"Work on the next task in plan.md"</span> review \
-     ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span>
-
-<span class="comment"># Everything composes</span>
-cook <span class="str">"Implement dark mode"</span> \
-     review v3 <span class="str">"cleanest result"</span></code></pre>
-    </section>
-
     <h2 class="reveal">* Primitives</h2>
     <section class="section reveal">
-      <p>Cook is built from three categories of operators:</p>
+      <p>Cook parses three categories of tokens:</p>
 
       <div class="feature-grid">
         <div class="feature-card">
           <h4>* Work</h4>
-          <p>The core unit: a single LLM call that does work.</p>
+          <p>A prompt. One agent call. The core unit.</p>
         </div>
         <div class="feature-card">
           <h4>* Loop operators</h4>
-          <p>Wrap work with iteration: repeat, review, ralph.</p>
+          <p>Wrap work with iteration: <code>xN</code>, <code>review</code>, <code>ralph</code>.</p>
         </div>
         <div class="feature-card">
           <h4>* Composition</h4>
-          <p>Run multiple cooks in parallel worktrees and resolve them.</p>
+          <p>Run parallel branches and resolve: <code>vN</code>, <code>vs</code>, <code>pick</code>.</p>
         </div>
       </div>
 
-      <p>Operators compose left to right. Loop operators wrap everything to their left.</p>
+      <p>Operators compose left to right. Each wraps everything to its left.</p>
 
       <pre><code>cook <span class="str">"work"</span> x3 review          <span class="comment"># (work×3) → review loop</span>
 cook <span class="str">"work"</span> review x3          <span class="comment"># (work → review loop) × 3</span>
 cook <span class="str">"work"</span> review v3 pick     <span class="comment"># race 3, each with a review loop</span></code></pre>
-    </section>
-
-    <h2 class="reveal">* Work</h2>
-    <section class="section reveal">
-      <p>A cook with no operators is a single LLM call:</p>
-
-      <pre><code>cook <span class="str">"Implement dark mode"</span></code></pre>
-
-      <p>One agent call, done.</p>
     </section>
 
     <h2 class="reveal">* Loop Operators</h2>
@@ -659,22 +633,13 @@ cook <span class="str">"Add dark mode"</span> \
   --review-agent claude --review-model opus</code></pre>
 
       <h3>ralph</h3>
-      <p>Ralph wraps a cook with an outer gate for working through a task list. The work prompt is self-directing — it reads project state to pick the next task each time.</p>
+      <p>Ralph wraps a cook with an outer gate for task-list progression. The work prompt is self-directing — it reads project state to find the current task each time.</p>
 
-      <pre><code>cook <span class="str">"Work on the next task in plan.md"</span> \
-     ralph <span class="str">"DONE if all tasks complete, else NEXT"</span>
-
-cook <span class="str">"Work on the next task in plan.md"</span> \
-     ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span></code></pre>
-
-      <p>Ralph with repeat and review:</p>
-
-      <pre><code><span class="comment"># x3 passes per task, then ralph advances</span>
-cook <span class="str">"Work on the next task in plan.md"</span> x3 \
+      <pre><code>cook <span class="str">"Work on next task in plan.md"</span> \
      ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span>
 
 <span class="comment"># review gate per task, then ralph advances</span>
-cook <span class="str">"Work on the next task in plan.md"</span> \
+cook <span class="str">"Work on next task in plan.md"</span> \
      review <span class="str">"Code review"</span> <span class="str">"DONE if no High issues, else ITERATE"</span> \
      ralph 5 <span class="str">"DONE if all tasks complete, else NEXT"</span></code></pre>
 
@@ -690,20 +655,13 @@ cook <span class="str">"Work on the next task in plan.md"</span> \
 
       <pre><code>cook <span class="str">"Add dark mode"</span> v3                       <span class="comment"># 3 runs, pick the best</span>
 cook <span class="str">"Add dark mode"</span> v3 <span class="str">"least code wins"</span>     <span class="comment"># with pick criteria</span>
-cook <span class="str">"Add dark mode"</span> race 3 <span class="str">"least code wins"</span> <span class="comment"># long-form alias</span></code></pre>
+cook <span class="str">"Add dark mode"</span> race 3 <span class="str">"least code wins"</span> <span class="comment"># long-form alias</span>
 
-      <p>Composes with loop operators:</p>
-
-      <pre><code>cook <span class="str">"Add dark mode"</span> review v3 <span class="str">"cleanest"</span>      <span class="comment"># race 3, each with a review loop</span>
-cook <span class="str">"Add dark mode"</span> x3 v3 <span class="str">"most complete"</span>     <span class="comment"># race 3, each with 3 passes</span>
-
-<span class="comment"># Race 3 complete ralph-with-review runs</span>
-cook <span class="str">"Work on next task in plan.md"</span> review \
-     ralph 5 <span class="str">"DONE if all tasks done, else NEXT"</span> \
-     v3 <span class="str">"most complete"</span></code></pre>
+cook <span class="str">"Add dark mode"</span> review v3 <span class="str">"cleanest"</span>      <span class="comment"># race 3, each with a review loop</span>
+cook <span class="str">"Add dark mode"</span> x3 v3 <span class="str">"most complete"</span>     <span class="comment"># race 3, each with 3 passes</span></code></pre>
 
       <h3>vs</h3>
-      <p><code>vs</code> runs two or more different cooks in parallel worktrees. Each branch is a full cook — it can have its own loop operators.</p>
+      <p><code>vs</code> runs two different cooks in parallel worktrees. Each branch is a full cook — it can have its own loop operators.</p>
 
       <pre><code>cook <span class="str">"Implement auth with JWT"</span> \
   vs \
@@ -716,7 +674,6 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
   merge <span class="str">"best developer experience"</span></code></pre>
 
       <h3>Resolvers</h3>
-      <p>Resolvers determine the outcome of a <code>vN</code>, <code>race N</code>, or <code>vs</code> composition.</p>
 
       <table>
         <thead>
@@ -728,32 +685,46 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
         <tbody>
           <tr>
             <td><code>pick ["criteria"]</code></td>
-            <td>Agent picks one winner. The winning branch is merged into your current branch. Default when none specified.</td>
+            <td>Pick one winner. Merge that branch. Default.</td>
           </tr>
           <tr>
             <td><code>merge ["criteria"]</code></td>
-            <td>Agent synthesizes all results into a new implementation in a fresh worktree.</td>
+            <td>Synthesize all results into a fresh implementation.</td>
           </tr>
           <tr>
             <td><code>compare</code></td>
-            <td>Agent writes a comparison doc. No branch is merged.</td>
+            <td>Write a comparison doc to <code>.cook/compare-&lt;session&gt;.md</code>. No merge.</td>
           </tr>
         </tbody>
       </table>
-
-      <pre><code>cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</span> pick <span class="str">"fewest lines changed"</span>
-cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</span> merge <span class="str">"cleanest implementation"</span>
-cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</span> compare</code></pre>
-
-      <p>After a resolver, the result can be versioned again:</p>
-
-      <pre><code>cook <span class="str">"A"</span> vs <span class="str">"B"</span> pick <span class="str">"cleanest"</span> v3 pick <span class="str">"most thorough"</span>
-<span class="comment"># runs 3 independent vs instances, picks the best of the 3 winners</span></code></pre>
     </section>
 
-    <h2 class="reveal">* Sandbox Modes</h2>
+    <h2 class="reveal">* Configuration</h2>
     <section class="section reveal">
-      <p>Cook supports two sandbox modes via <code>--sandbox</code>:</p>
+      <p>Run <code>cook init</code> in your project root to scaffold configuration files:</p>
+
+      <pre><code>cook init</code></pre>
+
+      <p>This creates:</p>
+      <ul>
+        <li><code>COOK.md</code> — project instructions and agent prompt template</li>
+        <li><code>.cook/config.json</code> — agent/model/sandbox defaults and per-step overrides</li>
+        <li><code>.cook/Dockerfile</code> — project dependencies for Docker sandbox mode</li>
+        <li><code>.cook/logs/</code> — session logs (gitignored)</li>
+      </ul>
+
+      <p>Example <code>.cook/config.json</code>:</p>
+      <pre><code>{
+  "agent": "claude",
+  "sandbox": "agent",
+  "steps": {
+    "work":    { "agent": "codex",  "model": "gpt-5-codex" },
+    "review":  { "agent": "claude", "model": "opus" }
+  },
+  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
+}</code></pre>
+
+      <h3>Sandbox Modes</h3>
 
       <table>
         <thead>
@@ -767,146 +738,23 @@ cook <span class="str">"Approach A"</span> vs <span class="str">"Approach B"</sp
           <tr>
             <td><strong>Agent</strong> (default)</td>
             <td><code>--sandbox agent</code></td>
-            <td>Spawns agents natively. Agents use their own OS-level sandboxes (Claude's Seatbelt/Landlock, Codex's workspace sandbox). No Docker required.</td>
+            <td>Agents use their own OS-level sandboxes. No Docker required.</td>
           </tr>
           <tr>
             <td><strong>Docker</strong></td>
             <td><code>--sandbox docker</code></td>
-            <td>Runs agents inside a Docker container with network restrictions. Full isolation.</td>
+            <td>Agents run in a Docker container with restricted network access.</td>
           </tr>
         </tbody>
       </table>
 
       <blockquote>
-        <p><strong>Note:</strong> OpenCode is only supported in Docker mode — it has no OS-level sandbox.</p>
+        <p><strong>Note:</strong> OpenCode is only supported in Docker mode.</p>
       </blockquote>
     </section>
 
-    <h2 class="reveal">* Configuration</h2>
-    <section class="section reveal">
-      <p>Run <code>cook init</code> in your project root to scaffold the configuration files:</p>
-
-      <pre><code>cook init</code></pre>
-
-      <p>This creates:</p>
-      <ul>
-        <li><code>COOK.md</code> — Project instructions and agent loop template</li>
-        <li><code>.cook/config.json</code> — Default agent/model/sandbox, per-step overrides</li>
-        <li><code>.cook/Dockerfile</code> — Project-specific dependencies (Docker mode only)</li>
-        <li><code>.cook/logs/</code> — Session logs (gitignored)</li>
-      </ul>
-
-      <p>Example <code>.cook/config.json</code>:</p>
-      <pre><code>{
-  "agent": "claude",
-  "sandbox": "agent",
-  "steps": {
-    "work":    { "agent": "codex",  "model": "gpt-5-codex" },
-    "review":  { "agent": "claude", "model": "opus" },
-    "gate":    {},
-    "iterate": {},
-    "ralph":   {}
-  },
-  "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
-}</code></pre>
-
-      <p>The <code>env</code> array controls which environment variables from your host are forwarded to the agent process. Auth tokens like <code>CLAUDE_CODE_OAUTH_TOKEN</code> and <code>OPENAI_API_KEY</code> need to be listed here for agents to authenticate.</p>
-
-      <p>CLI defaults (<code>--agent</code>, <code>--model</code>, <code>--sandbox</code>) override config defaults for a single run. Step flags override both.</p>
-
-      <h3>Docker Mode Details</h3>
-      <p>When using <code>--sandbox docker</code>, the agent runs inside a Docker container. Network access is restricted by default — only outbound HTTPS to the agent's API endpoint is allowed.</p>
-
-      <p>To allow additional hosts, create <code>.cook/docker.json</code>:</p>
-      <pre><code>{
-  "network": {
-    "mode": "restricted",
-    "allowedHosts": ["registry.npmjs.org", "api.github.com"]
-  }
-}</code></pre>
-    </section>
-
-    <h2 class="reveal">* COOK.md</h2>
-    <section class="section reveal">
-      <p><code>COOK.md</code> lives in your project root and does two things: it holds project-level instructions for the agent, and it defines the template used to construct the prompt sent to the agent at each step.</p>
-
-      <p>When <code>cook</code> runs, it renders <code>COOK.md</code> as a JavaScript template literal, injecting these variables:</p>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Variable</th>
-            <th>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>${step}</code></td>
-            <td>Current step: <code>work</code>, <code>review</code>, <code>gate</code>, <code>iterate</code>, or <code>ralph</code></td>
-          </tr>
-          <tr>
-            <td><code>${prompt}</code></td>
-            <td>The prompt for this step</td>
-          </tr>
-          <tr>
-            <td><code>${lastMessage}</code></td>
-            <td>Output from the previous step</td>
-          </tr>
-          <tr>
-            <td><code>${iteration}</code></td>
-            <td>Current review iteration number</td>
-          </tr>
-          <tr>
-            <td><code>${maxIterations}</code></td>
-            <td>Max review iterations</td>
-          </tr>
-          <tr>
-            <td><code>${ralphIteration}</code></td>
-            <td>Current ralph task number (ralph only)</td>
-          </tr>
-          <tr>
-            <td><code>${maxRalph}</code></td>
-            <td>Max ralph tasks (ralph only)</td>
-          </tr>
-          <tr>
-            <td><code>${repeatPass}</code></td>
-            <td>Current repeat pass number (repeat only)</td>
-          </tr>
-          <tr>
-            <td><code>${maxRepeatPasses}</code></td>
-            <td>Total repeat passes (repeat only)</td>
-          </tr>
-          <tr>
-            <td><code>${logFile}</code></td>
-            <td>Path to the session log file</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <p>The default template (used when no <code>COOK.md</code> exists):</p>
-
-      <pre><code># COOK.md
-
-## Project Instructions
-
-## Agent Loop
-
-Step: **${step}** | Iteration: ${iteration}/${maxIterations}
-
-### Task
-${prompt}
-
-${lastMessage ? '### Previous Output\n' + lastMessage : ''}
-
-### History
-Session log: ${logFile}
-Read the session log for full context from previous steps.</code></pre>
-
-      <p>Edit the <code>## Project Instructions</code> section to give the agent context about your project. Backticks and bare <code>$</code> are escaped automatically — write <code>\${...}</code> to emit a literal <code>${...}</code>.</p>
-    </section>
-
     <footer>
-      <p>* Let it cook. *</p>
+      <p>* cook. *</p>
     </footer>
 
   </div>
@@ -925,19 +773,6 @@ Read the session log for full context from previous steps.</code></pre>
     }, { threshold: 0.1 });
 
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-    // === TITLE ANIMATION ===
-    const titles = [
-      'cook - Let it cook.',
-      'cook - SMAAAASH!!',
-      'cook - You won!',
-      'cook - HP restored!',
-    ];
-    let titleIdx = 0;
-    setInterval(() => {
-      titleIdx = (titleIdx + 1) % titles.length;
-      document.title = titles[titleIdx];
-    }, 4000);
   </script>
 </body>
 </html>
