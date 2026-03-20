@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -238,9 +238,9 @@ function hasFile(file: string): boolean {
 function hasCommandOnPath(command: string): boolean {
   try {
     if (process.platform === 'win32') {
-      execSync(`where.exe ${command}`, { encoding: 'utf8', stdio: 'ignore' })
+      execFileSync('where.exe', [command], { stdio: 'ignore' })
     } else {
-      execSync(`command -v ${command}`, { encoding: 'utf8', stdio: 'ignore', shell: '/bin/sh' })
+      execFileSync('/bin/sh', ['-lc', 'command -v "$1" >/dev/null 2>&1', 'sh', command], { stdio: 'ignore' })
     }
     return true
   } catch {
