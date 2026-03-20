@@ -235,6 +235,19 @@ function hasFile(file: string): boolean {
   }
 }
 
+function hasCommandOnPath(command: string): boolean {
+  try {
+    if (process.platform === 'win32') {
+      execSync(`where.exe ${command}`, { encoding: 'utf8', stdio: 'ignore' })
+    } else {
+      execSync(`command -v ${command}`, { encoding: 'utf8', stdio: 'ignore', shell: '/bin/sh' })
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
 function hostClaudeLoggedIn(): boolean {
   try {
     const out = execSync('claude auth status', { encoding: 'utf8' }).trim()
@@ -343,10 +356,9 @@ async function cmdDoctor(args: string[]): Promise<void> {
   if (usedModes.has('agent')) {
     for (const agent of plan.runAgents) {
       if (agent === 'opencode') continue
-      try {
-        execSync(`which ${agent}`, { encoding: 'utf8' })
+      if (hasCommandOnPath(agent)) {
         logOK(`${agent} CLI found on PATH`)
-      } catch {
+      } else {
         allGood = false
         logErr(`${agent} CLI not found on PATH`)
       }
