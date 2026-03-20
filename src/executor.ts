@@ -12,6 +12,7 @@ import { agentLoop, loopEvents, type LoopConfig, type LoopResult } from './loop.
 import { renderTemplate } from './template.js'
 import { loadCookMD } from './template.js'
 import { createSessionLog, appendToLog } from './log.js'
+import { RunnerPool } from './runner.js'
 import {
   sessionId,
   createWorktree,
@@ -43,6 +44,8 @@ export interface ExecutionContext {
   maxRepeatPasses?: number
   ralphIteration?: number
   maxRalph?: number
+  // Injectable factory for tests — omit in production to use createRunnerPool
+  poolFactory?: (worktreePath: string, config: CookConfig, runAgents: AgentName[]) => RunnerPool
 }
 
 export interface ExecutionResult {
@@ -99,7 +102,7 @@ ITERATE if: there are High severity issues or the work is incomplete.`
 // --- Work: single agent call ---
 
 async function executeWork(node: { type: 'work'; prompt: string }, ctx: ExecutionContext): Promise<ExecutionResult> {
-  const pool = createRunnerPool(ctx.projectRoot, ctx.config, ctx.runAgents)
+  const pool = (ctx.poolFactory ?? createRunnerPool)(ctx.projectRoot, ctx.config, ctx.runAgents)
   const unregister = registerCleanup(async () => { await pool.stopAll() })
 
   // Render TUI — App listens on the module-level loopEvents singleton
@@ -191,7 +194,7 @@ async function executeReview(
   node: { type: 'review'; inner: Node; reviewPrompt?: string; gatePrompt?: string; iteratePrompt?: string; maxIterations: number },
   ctx: ExecutionContext,
 ): Promise<ExecutionResult> {
-  const pool = createRunnerPool(ctx.projectRoot, ctx.config, ctx.runAgents)
+  const pool = (ctx.poolFactory ?? createRunnerPool)(ctx.projectRoot, ctx.config, ctx.runAgents)
   const unregister = registerCleanup(async () => { await pool.stopAll() })
 
   // Determine work prompt from inner node
@@ -311,7 +314,7 @@ async function executeRalph(
   const ralphStepConfig = ctx.stepConfig.ralph?.agent ? ctx.stepConfig.ralph : ctx.stepConfig.gate
 
   // Create a single pool for ralph gate calls, reused across all iterations
-  const pool = createRunnerPool(ctx.projectRoot, ctx.config, ctx.runAgents)
+  const pool = (ctx.poolFactory ?? createRunnerPool)(ctx.projectRoot, ctx.config, ctx.runAgents)
   const unregister = registerCleanup(async () => { await pool.stopAll() })
 
   try {
@@ -378,7 +381,7 @@ async function executeRalph(
 const NEXT_KEYWORDS = ['NEXT', 'CONTINUE']
 const RALPH_DONE_KEYWORDS = ['DONE', 'COMPLETE', 'FINISHED']
 
-function parseRalphVerdict(output: string): 'NEXT' | 'DONE' {
+export function parseRalphVerdict(output: string): 'NEXT' | 'DONE' {
   for (const line of output.split('\n')) {
     const upper = line.trim().toUpperCase()
     if (RALPH_DONE_KEYWORDS.some(kw => upper.includes(kw))) return 'DONE'
@@ -471,7 +474,7 @@ async function executeComposition(
 
   // Create pools and cookMDs before registering cleanup so they're in scope
   const cookMDs = worktrees.map(wt => loadCookMD(wt.worktreePath))
-  const pools = worktrees.map(wt => createRunnerPool(wt.worktreePath, ctx.config, ctx.runAgents))
+  const pools = worktrees.map(wt => (ctx.poolFactory ?? createRunnerPool)(wt.worktreePath, ctx.config, ctx.runAgents))
 
   const unregister = registerCleanup(async () => {
     unmount()
@@ -742,7 +745,7 @@ async function resolvePick(
 
   const judgePrompt = buildJudgePrompt(results, criteria)
   const gateStep = ctx.stepConfig.gate
-  const pool = createRunnerPool(projectRoot, ctx.config, ctx.runAgents)
+  const pool = (ctx.poolFactory ?? createRunnerPool)(projectRoot, ctx.config, ctx.runAgents)
 
   let judgeOutput: string
   try {
@@ -823,7 +826,7 @@ async function resolveMerge(
   const mergeWorkPrompt = `Synthesize the best parts of the provided runs. Read MERGE_CONTEXT.md for the run diffs and logs.\n\nCriteria: ${criteria}\n\nCombine the strongest elements from each run into a single coherent implementation.`
 
   const mergeEmitter = new EventEmitter()
-  const mergePool = createRunnerPool(mergeWt.worktreePath, ctx.config, ctx.runAgents)
+  const mergePool = (ctx.poolFactory ?? createRunnerPool)(mergeWt.worktreePath, ctx.config, ctx.runAgents)
 
   const { unmount: unmountMerge, waitUntilExit: waitMergeExit } = render(
     React.createElement(RaceApp, {
@@ -946,7 +949,7 @@ Then provide an overall recommendation with reasoning.
 ${contextParts.join('\n\n')}`
 
   const gateStep = ctx.stepConfig.gate
-  const pool = createRunnerPool(projectRoot, ctx.config, ctx.runAgents)
+  const pool = (ctx.poolFactory ?? createRunnerPool)(projectRoot, ctx.config, ctx.runAgents)
 
   let compareOutput: string
   try {

@@ -9,3 +9,11 @@
 - [ ] Configurable gate keyword? (ie. `COOK.gate-keyword.md`)
 - [ ] unique sandbox ids so we can run multiple at once
 - [ ] option to run parallel instances, for review after.
+
+## From h5p-test-harness run (2026-03-17)
+
+- [ ] Composition integration tests — `executeComposition` with real temp git repo and poolFactory injection; branches and per-worktree pools already parameterized, needs temp repo setup and coordinated TestRunner response sequences
+- [ ] Resolver integration tests (`resolvePick`, `resolveMerge`, `resolveCompare`) — auto-pick path testable now; non-auto paths need stdin mock for `confirm()`/`pickOne()`
+- [ ] UI tests — `App.tsx`, `RaceApp.tsx`, `LogStream.tsx` via `@inkjs/testing`; deferred as low-value for v1
+- [ ] Refactor `loopEvents` singleton to injected EventEmitter in executor paths — would remove the need for sequential executor tests and allow full parallel test execution
+- [ ] `parseRalphVerdict('APPROVE')` returns DONE via fail-safe (not keyword match) — APPROVE is not in RALPH_DONE_KEYWORDS; consider whether this is intentional or an oversight
