@@ -128,6 +128,49 @@ This is the most complex pattern and the most likely to break.
 - [ ] For `compare`: doc written, no merge
 - [ ] Worktrees and branches cleaned up after resolution
 
+#### 5a: Worktree setup (known failure mode)
+
+The git worktree sequence is precise and Claude frequently gets it wrong. This sub-category isolates just the setup phase.
+
+**Spec says:**
+```sh
+# Step 1: Create branches
+git branch cook-race-{session}-1
+git branch cook-race-{session}-2
+
+# Step 2: Create worktrees from those branches
+git worktree add .cook/race/{session}/run-1 cook-race-{session}-1
+git worktree add .cook/race/{session}/run-2 cook-race-{session}-2
+```
+
+**Known failure modes:**
+
+| # | Failure | What goes wrong |
+|---|---------|----------------|
+| 5a.1 | Wrong order | `git worktree add` before `git branch` → fails because branch doesn't exist |
+| 5a.2 | Skip branch creation | Uses `git worktree add -b` (implicit branch) — different from spec, may work but diverges from the contract |
+| 5a.3 | Skip worktrees entirely | Tells agents "work in a separate directory" without actually creating a worktree — agents share the same working tree |
+| 5a.4 | Wrong worktree path | Puts worktrees somewhere other than `.cook/race/{session}/run-{i}` |
+| 5a.5 | Wrong branch naming | Uses arbitrary names instead of `cook-race-{session}-{i}` |
+| 5a.6 | Missing directory | Doesn't ensure `.cook/race/{session}/` exists before `worktree add` (may fail on some systems) |
+| 5a.7 | Detached HEAD | Creates worktree without specifying the branch, resulting in detached HEAD in the worktree |
+| 5a.8 | Single command | Tries to create all branches/worktrees in one Bash call and a failure partway through leaves partial state |
+
+**Checklist for worktree setup:**
+- [ ] `git branch` runs before `git worktree add` for each branch
+- [ ] Branch names follow `cook-race-{session}-{i}` pattern
+- [ ] Worktree paths follow `.cook/race/{session}/run-{i}` pattern
+- [ ] Each worktree is linked to its corresponding branch (not detached)
+- [ ] The Bash commands actually succeed (check exit codes / output)
+- [ ] Session ID is consistent across all branches and worktrees in one run
+
+**Checklist for worktree cleanup:**
+- [ ] `git worktree remove` runs for each worktree
+- [ ] `git branch -D` runs for each race branch
+- [ ] Cleanup runs even if resolution fails
+- [ ] No leftover worktrees visible in `git worktree list` after completion
+- [ ] No leftover `cook-race-*` branches in `git branch` after completion
+
 ### Category 6: Composition correctness
 
 The hardest category. Tests that operators compose left-to-right correctly.
@@ -212,6 +255,7 @@ Based on the skill design, these are the likely weak spots:
 8. **Review feedback lost** — on ITERATE, doesn't pass review feedback to next work agent.
 9. **Wrong defaults** — review doesn't default to max 3, or pick isn't the default resolver.
 10. **Improvises operators** — invents steps not in the spec (e.g., "let me also run tests").
+11. **Worktree setup botched** — wrong git command order, missing branches, wrong paths, or skipping worktrees entirely. Observed in production. See Category 5a for detailed failure taxonomy.
 
 ## Scoring
 
