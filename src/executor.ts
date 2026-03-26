@@ -543,6 +543,14 @@ async function executeComposition(
   unmount()
   try { await waitUntilExit() } catch { /* ok */ }
 
+  // Restore stdin after ink's useInput cleanup (it pauses/unrefs stdin,
+  // which breaks subsequent readline prompts like confirm())
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(false)
+  }
+  process.stdin.resume()
+  process.stdin.ref()
+
   // Stop all pools
   for (const pool of pools) {
     await pool.stopAll()
