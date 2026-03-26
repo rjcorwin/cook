@@ -5,6 +5,7 @@ import { LineBuffer } from './line-buffer.js'
 
 export class NativeRunner implements AgentRunner {
   private child: ChildProcess | null = null
+  private aborted = false
 
   constructor(
     private projectRoot: string,
@@ -21,6 +22,9 @@ export class NativeRunner implements AgentRunner {
     prompt: string,
     onLine: (line: string) => void,
   ): Promise<string> {
+    if (this.aborted) {
+      throw new Error('Runner was stopped (cancelled)')
+    }
     if (agent === 'opencode') {
       throw new Error('opencode is not supported in native mode — it has no OS-level sandbox. Use --sandbox docker instead.')
     }
@@ -88,6 +92,7 @@ export class NativeRunner implements AgentRunner {
   }
 
   async stop(): Promise<void> {
+    this.aborted = true
     if (!this.child) return
     this.child.kill('SIGTERM')
     await new Promise<void>((resolve) => {

@@ -58,6 +58,7 @@ export async function agentLoop(
   config: LoopConfig,
   cookMD: string,
   events: EventEmitter,
+  signal?: AbortSignal,
 ): Promise<LoopResult> {
   const logFile = createSessionLog(config.projectRoot)
   events.emit('logFile', logFile)
@@ -116,6 +117,7 @@ export async function agentLoop(
           config.retry,
           (info) => events.emit('waiting', info),
           (info) => events.emit('retry', info),
+          signal,
         )
       } catch (err) {
         events.emit('error', `${step.name} step failed (iteration ${i}): ${err}`)

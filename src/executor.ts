@@ -458,6 +458,21 @@ async function executeComposition(
     emitters[i].on('logFile', (logFile: string) => { logFiles[i] = logFile })
   }
 
+  // Create pools and cookMDs before registering cleanup so they're in scope
+  const cookMDs = worktrees.map(wt => loadCookMD(wt.worktreePath))
+  const pools = worktrees.map(wt => createRunnerPool(wt.worktreePath, ctx.config, ctx.runAgents))
+
+  // Early finish mechanism: resolve this promise to stop waiting for remaining runs
+  let finishEarlyResolve: (() => void) | undefined
+  const finishEarlyPromise = new Promise<void>(resolve => { finishEarlyResolve = resolve })
+
+  // Per-branch abort controllers for clean cancellation
+  const abortControllers = worktrees.map(() => new AbortController())
+
+  const onFinishEarly = () => {
+    finishEarlyResolve?.()
+  }
+
   // Render TUI (RaceApp uses per-run emitters, not loopEvents)
   const { unmount, waitUntilExit } = render(
     React.createElement(RaceApp, {
@@ -465,13 +480,11 @@ async function executeComposition(
       maxIterations: 3,
       emitters,
       animation: ctx.config.animation,
+      worktreePaths: worktrees.map(wt => wt.worktreePath),
+      onFinishEarly,
     }),
     { exitOnCtrlC: false }
   )
-
-  // Create pools and cookMDs before registering cleanup so they're in scope
-  const cookMDs = worktrees.map(wt => loadCookMD(wt.worktreePath))
-  const pools = worktrees.map(wt => createRunnerPool(wt.worktreePath, ctx.config, ctx.runAgents))
 
   const unregister = registerCleanup(async () => {
     unmount()
@@ -484,18 +497,48 @@ async function executeComposition(
     cleanupSessionDir(projectRoot, session)
   })
 
+  // Track per-run settled results as they complete
+  const settledResults: (PromiseSettledResult<ExecutionResult> | undefined)[] = new Array(n).fill(undefined)
+
   const promises = worktrees.map((wt, i) => {
-    // For each branch, we need to dispatch based on the branch node type
-    // For simple work or review nodes, we can use agentLoop directly with the branch emitter
     const branchNode = node.branches[i]
     return executeBranchForComposition(branchNode, {
       ...ctx,
       projectRoot: wt.worktreePath,
       cookMD: cookMDs[i],
-    }, pools[i], emitters[i])
+    }, pools[i], emitters[i], abortControllers[i].signal)
   })
 
-  const settled = await Promise.allSettled(promises)
+  // Wrap promises to track individual completion
+  const trackedPromises = promises.map(async (p, i) => {
+    try {
+      const value = await p
+      settledResults[i] = { status: 'fulfilled', value }
+    } catch (reason) {
+      settledResults[i] = { status: 'rejected', reason }
+    }
+  })
+
+  // Wait for all to finish, OR early finish signal
+  await Promise.race([
+    Promise.all(trackedPromises),
+    finishEarlyPromise,
+  ])
+
+  // If early finish was triggered, stop remaining runs
+  const hasUnfinished = settledResults.some(r => r === undefined)
+  if (hasUnfinished) {
+    logStep('Finishing early — stopping remaining runs...')
+    for (let i = 0; i < n; i++) {
+      if (!settledResults[i]) {
+        abortControllers[i].abort()
+        pools[i].stopAll().catch(() => {})
+        emitters[i].emit('error', 'cancelled (finished early)')
+      }
+    }
+    // Wait for killed processes to settle
+    await Promise.all(trackedPromises)
+  }
 
   unmount()
   try { await waitUntilExit() } catch { /* ok */ }
@@ -505,8 +548,9 @@ async function executeComposition(
     await pool.stopAll()
   }
 
-  // Commit changes in each worktree
+  // Commit changes in each worktree (skip cancelled runs to avoid committing partial work)
   for (let i = 0; i < n; i++) {
+    if (settledResults[i]?.status !== 'fulfilled') continue
     const wt = worktrees[i]
     try {
       execSync('git add -A', { cwd: wt.worktreePath, stdio: 'pipe' })
@@ -523,13 +567,13 @@ async function executeComposition(
   unregister()
 
   // Build results
-  const results: RunResult[] = settled.map((result, i) => ({
+  const results: RunResult[] = settledResults.map((result, i) => ({
     index: i + 1,
-    status: result.status === 'fulfilled' ? 'done' as const : 'error' as const,
-    logFile: result.status === 'fulfilled' ? (result.value.logFile ?? logFiles[i] ?? '') : '',
+    status: result?.status === 'fulfilled' ? 'done' as const : 'error' as const,
+    logFile: result?.status === 'fulfilled' ? (result.value.logFile ?? logFiles[i] ?? '') : '',
     worktreePath: worktrees[i].worktreePath,
     branchName: worktrees[i].branchName,
-    error: result.status === 'rejected' ? String(result.reason) : undefined,
+    error: result?.status === 'rejected' ? String(result.reason) : (result === undefined ? 'cancelled' : undefined),
   }))
 
   // Print summary
@@ -571,6 +615,7 @@ async function executeBranchForComposition(
   ctx: ExecutionContext,
   pool: ReturnType<typeof createRunnerPool>,
   emitter: EventEmitter,
+  signal?: AbortSignal,
 ): Promise<ExecutionResult> {
   switch (node.type) {
     case 'work': {
@@ -607,6 +652,7 @@ async function executeBranchForComposition(
         ctx.config.retry,
         (info) => emitter.emit('waiting', info),
         (info) => emitter.emit('retry', info),
+        signal,
       )
 
       try { appendToLog(logFile, 'work', 1, output) } catch { /* ok */ }
@@ -621,7 +667,7 @@ async function executeBranchForComposition(
         workPrompt = node.inner.prompt
       } else {
         // Execute inner node first (e.g., repeat), then review
-        const innerResult = await executeBranchForComposition(node.inner, ctx, pool, emitter)
+        const innerResult = await executeBranchForComposition(node.inner, ctx, pool, emitter, signal)
         workPrompt = node.iteratePrompt ?? 'Continue working on the task based on the review feedback.'
         ctx = { ...ctx, lastMessage: innerResult.lastMessage }
       }
@@ -643,7 +689,7 @@ async function executeBranchForComposition(
         maxRepeatPasses: ctx.maxRepeatPasses,
       }
 
-      const loopResult = await agentLoop(pool.get.bind(pool), loopConfig, ctx.cookMD, emitter)
+      const loopResult = await agentLoop(pool.get.bind(pool), loopConfig, ctx.cookMD, emitter, signal)
       return {
         lastMessage: loopResult.lastMessage,
         logFile: loopResult.logFile,
@@ -660,7 +706,7 @@ async function executeBranchForComposition(
           lastMessage: result.lastMessage,
           repeatPass: pass,
           maxRepeatPasses: node.count,
-        }, pool, emitter)
+        }, pool, emitter, signal)
       }
       return result
     }
@@ -673,7 +719,7 @@ async function executeBranchForComposition(
           lastMessage: result.lastMessage,
           ralphIteration: task,
           maxRalph: node.maxTasks,
-        }, pool, emitter)
+        }, pool, emitter, signal)
 
         // If inner loop hit max iterations without converging, stop ralph
         if (result.verdict === 'MAX_ITERATIONS') {
@@ -704,6 +750,7 @@ async function executeBranchForComposition(
           ctx.config.retry,
           (info) => emitter.emit('waiting', info),
           (info) => emitter.emit('retry', info),
+          signal,
         )
 
         const verdict = parseRalphVerdict(output)
@@ -766,7 +813,7 @@ async function resolvePick(
   await pool.stopAll()
 
   const winner = parseJudgeVerdict(judgeOutput, results.length)
-  if (winner === null) {
+  if (winner === null || !successfulRuns.some(r => r.index === winner)) {
     logWarn('Pick did not return a clear verdict. You can manually compare:')
     for (const r of successfulRuns) {
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
