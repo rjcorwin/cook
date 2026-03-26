@@ -85,16 +85,43 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
   // Track whether early finish was triggered
   const [finishedEarly, setFinishedEarly] = useState(false)
 
-  // Listen for 'f' key to finish early
-  useInput(useCallback((input: string) => {
-    if (input === 'f' && !finishedEarly) {
-      const doneCount = runs.filter(r => r.status === 'done').length
-      if (doneCount > 0 && !runs.every(r => r.status === 'done' || r.status === 'error')) {
+  // Double-tap Ctrl+C to quit when no runs are done
+  const [ctrlCPending, setCtrlCPending] = useState(false)
+  useEffect(() => {
+    if (!ctrlCPending) return
+    const timer = setTimeout(() => setCtrlCPending(false), 3000)
+    return () => clearTimeout(timer)
+  }, [ctrlCPending])
+
+  // Listen for [f] or Ctrl+C
+  useInput(useCallback((input: string, key: { ctrl?: boolean }) => {
+    if (finishedEarly) return
+    const done = runs.filter(r => r.status === 'done').length
+    const allSettled = runs.every(r => r.status === 'done' || r.status === 'error')
+
+    // Ctrl+C
+    if (key.ctrl && input === 'c') {
+      if (done > 0 && !allSettled) {
+        // Runs are done — finish early (same as [f])
         setFinishedEarly(true)
         onFinishEarly?.()
+      } else if (ctrlCPending) {
+        // Second Ctrl+C — quit
+        setFinishedEarly(true)
+        onFinishEarly?.()
+      } else {
+        // First Ctrl+C, no runs done — warn
+        setCtrlCPending(true)
       }
+      return
     }
-  }, [runs, finishedEarly, onFinishEarly]), { isActive: !!onFinishEarly })
+
+    // [f] to finish early
+    if (input === 'f' && done > 0 && !allSettled) {
+      setFinishedEarly(true)
+      onFinishEarly?.()
+    }
+  }, [runs, finishedEarly, onFinishEarly, ctrlCPending]), { isActive: !!onFinishEarly })
 
   // Wire up per-run event emitters
   useEffect(() => {
@@ -189,17 +216,31 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
         )
       })}
 
-      {canFinishEarly && (
+      {ctrlCPending && !finishedEarly && (
+        <Box marginTop={1}>
+          <Text color="red">Press Ctrl+C again to quit</Text>
+        </Box>
+      )}
+
+      {canFinishEarly && !ctrlCPending && (
         <Box marginTop={1}>
           <Text color="yellow">{doneCount} done, {runningCount} running {'\u00b7'} Press </Text>
           <Text color="yellow" bold>[f]</Text>
-          <Text color="yellow"> to finish early with completed runs</Text>
+          <Text color="yellow"> or </Text>
+          <Text color="yellow" bold>Ctrl+C</Text>
+          <Text color="yellow"> to finish early</Text>
+        </Box>
+      )}
+
+      {!canFinishEarly && runningCount > 0 && doneCount === 0 && !ctrlCPending && !finishedEarly && (
+        <Box marginTop={1}>
+          <Text dimColor>Ctrl+C to cancel</Text>
         </Box>
       )}
 
       {finishedEarly && (
         <Box marginTop={1}>
-          <Text color="yellow" bold>Finishing early with {doneCount} completed run{doneCount !== 1 ? 's' : ''}...</Text>
+          <Text color="yellow" bold>Finishing early{doneCount > 0 ? ` with ${doneCount} completed run${doneCount !== 1 ? 's' : ''}` : ''}...</Text>
         </Box>
       )}
 
