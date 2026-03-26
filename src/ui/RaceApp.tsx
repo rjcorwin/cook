@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Box, Text, useApp, useStdout } from 'ink'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Box, Text, useApp, useStdout, useInput } from 'ink'
 import type { EventEmitter } from 'events'
 import type { AnimationStyle } from '../config.js'
 
@@ -23,6 +23,8 @@ interface RaceAppProps {
   title?: string
   runLabel?: string
   runLabels?: string[]
+  worktreePaths?: string[]
+  onFinishEarly?: () => void
 }
 
 function formatElapsed(secs: number): string {
@@ -55,7 +57,7 @@ function formatCountdown(target: Date): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function RaceApp({ runCount, maxIterations, emitters, animation, title, runLabel = 'Run', runLabels }: RaceAppProps) {
+export function RaceApp({ runCount, maxIterations, emitters, animation, title, runLabel = 'Run', runLabels, worktreePaths, onFinishEarly }: RaceAppProps) {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const barWidth = Math.min(20, Math.floor((stdout?.columns ?? 80) / 4))
@@ -79,6 +81,47 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
     const timer = setInterval(() => setTick(t => t + 1), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Track whether early finish was triggered
+  const [finishedEarly, setFinishedEarly] = useState(false)
+
+  // Double-tap Ctrl+C to quit when no runs are done
+  const [ctrlCPending, setCtrlCPending] = useState(false)
+  useEffect(() => {
+    if (!ctrlCPending) return
+    const timer = setTimeout(() => setCtrlCPending(false), 3000)
+    return () => clearTimeout(timer)
+  }, [ctrlCPending])
+
+  // Listen for [f] or Ctrl+C
+  useInput(useCallback((input: string, key: { ctrl?: boolean }) => {
+    if (finishedEarly) return
+    const done = runs.filter(r => r.status === 'done').length
+    const allSettled = runs.every(r => r.status === 'done' || r.status === 'error')
+
+    // Ctrl+C
+    if (key.ctrl && input === 'c') {
+      if (done > 0 && !allSettled) {
+        // Runs are done — finish early (same as [f])
+        setFinishedEarly(true)
+        onFinishEarly?.()
+      } else if (ctrlCPending) {
+        // Second Ctrl+C — quit
+        setFinishedEarly(true)
+        onFinishEarly?.()
+      } else {
+        // First Ctrl+C, no runs done — warn
+        setCtrlCPending(true)
+      }
+      return
+    }
+
+    // [f] to finish early
+    if (input === 'f' && done > 0 && !allSettled) {
+      setFinishedEarly(true)
+      onFinishEarly?.()
+    }
+  }, [runs, finishedEarly, onFinishEarly, ctrlCPending]), { isActive: !!onFinishEarly })
 
   // Wire up per-run event emitters
   useEffect(() => {
@@ -127,6 +170,10 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
     if (allDone) exit()
   }, [allDone, exit])
 
+  const doneCount = runs.filter(r => r.status === 'done').length
+  const runningCount = runs.filter(r => r.status === 'running' || r.status === 'waiting' || r.status === 'rate-limited').length
+  const canFinishEarly = onFinishEarly && doneCount > 0 && runningCount > 0 && !finishedEarly
+
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
@@ -149,18 +196,55 @@ export function RaceApp({ runCount, maxIterations, emitters, animation, title, r
           ? ''
           : `${run.step} ${run.iteration}/${run.maxIterations}`
 
+        const wtPath = worktreePaths?.[run.id - 1]
+
         return (
-          <Box key={run.id} gap={1}>
-            <Text bold>{runLabels ? runLabels[run.id - 1] : `${runLabel} ${run.id}`}</Text>
-            <Text color={run.status === 'done' ? 'green' : run.status === 'error' ? 'red' : '#ff8c00'}>{bar}</Text>
-            <Text>{stepLabel.padEnd(14)}</Text>
-            <Text color="gray">{formatElapsed(elapsed).padStart(6)}</Text>
-            <Text color={STATUS_COLORS[run.status]}>{run.status}</Text>
+          <Box key={run.id} flexDirection="column">
+            <Box gap={1}>
+              <Text bold>{runLabels ? runLabels[run.id - 1] : `${runLabel} ${run.id}`}</Text>
+              <Text color={run.status === 'done' ? 'green' : run.status === 'error' ? 'red' : '#ff8c00'}>{bar}</Text>
+              <Text>{stepLabel.padEnd(14)}</Text>
+              <Text color="gray">{formatElapsed(elapsed).padStart(6)}</Text>
+              <Text color={STATUS_COLORS[run.status]}>{run.status}</Text>
+            </Box>
+            {wtPath && (
+              <Box marginLeft={2}>
+                <Text dimColor>{wtPath}</Text>
+              </Box>
+            )}
           </Box>
         )
       })}
 
-      {allDone && (
+      {ctrlCPending && !finishedEarly && (
+        <Box marginTop={1}>
+          <Text color="red">Press Ctrl+C again to quit</Text>
+        </Box>
+      )}
+
+      {canFinishEarly && !ctrlCPending && (
+        <Box marginTop={1}>
+          <Text color="yellow">{doneCount} done, {runningCount} running {'\u00b7'} Press </Text>
+          <Text color="yellow" bold>[f]</Text>
+          <Text color="yellow"> or </Text>
+          <Text color="yellow" bold>Ctrl+C</Text>
+          <Text color="yellow"> to finish early</Text>
+        </Box>
+      )}
+
+      {!canFinishEarly && runningCount > 0 && doneCount === 0 && !ctrlCPending && !finishedEarly && (
+        <Box marginTop={1}>
+          <Text dimColor>Ctrl+C to cancel</Text>
+        </Box>
+      )}
+
+      {finishedEarly && (
+        <Box marginTop={1}>
+          <Text color="yellow" bold>Finishing early{doneCount > 0 ? ` with ${doneCount} completed run${doneCount !== 1 ? 's' : ''}` : ''}...</Text>
+        </Box>
+      )}
+
+      {allDone && !finishedEarly && (
         <Box marginTop={1}>
           <Text color="green" bold>{'\u2713 All runs complete'}</Text>
         </Box>

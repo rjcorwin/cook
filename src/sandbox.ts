@@ -326,6 +326,8 @@ async function runAgent(
 }
 
 export class Sandbox implements AgentRunner {
+  private aborted = false
+
   constructor(
     private docker: Docker,
     private container: Docker.Container,
@@ -335,10 +337,14 @@ export class Sandbox implements AgentRunner {
   ) {}
 
   async runAgent(agent: AgentName, model: string, prompt: string, onLine: (line: string) => void): Promise<string> {
+    if (this.aborted) {
+      throw new Error('Runner was stopped (cancelled)')
+    }
     return runAgent(this.container, this.docker, agent, model, prompt, this.userSpec, this.env, this.projectRoot, onLine)
   }
 
   async stop(): Promise<void> {
+    this.aborted = true
     await this.container.remove({ force: true }).catch(() => {})
     logOK('Sandbox stopped')
   }

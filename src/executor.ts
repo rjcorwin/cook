@@ -458,6 +458,21 @@ async function executeComposition(
     emitters[i].on('logFile', (logFile: string) => { logFiles[i] = logFile })
   }
 
+  // Create pools and cookMDs before registering cleanup so they're in scope
+  const cookMDs = worktrees.map(wt => loadCookMD(wt.worktreePath))
+  const pools = worktrees.map(wt => createRunnerPool(wt.worktreePath, ctx.config, ctx.runAgents))
+
+  // Early finish mechanism: resolve this promise to stop waiting for remaining runs
+  let finishEarlyResolve: (() => void) | undefined
+  const finishEarlyPromise = new Promise<void>(resolve => { finishEarlyResolve = resolve })
+
+  // Per-branch abort controllers for clean cancellation
+  const abortControllers = worktrees.map(() => new AbortController())
+
+  const onFinishEarly = () => {
+    finishEarlyResolve?.()
+  }
+
   // Render TUI (RaceApp uses per-run emitters, not loopEvents)
   const { unmount, waitUntilExit } = render(
     React.createElement(RaceApp, {
@@ -465,13 +480,11 @@ async function executeComposition(
       maxIterations: 3,
       emitters,
       animation: ctx.config.animation,
+      worktreePaths: worktrees.map(wt => wt.worktreePath),
+      onFinishEarly,
     }),
     { exitOnCtrlC: false }
   )
-
-  // Create pools and cookMDs before registering cleanup so they're in scope
-  const cookMDs = worktrees.map(wt => loadCookMD(wt.worktreePath))
-  const pools = worktrees.map(wt => createRunnerPool(wt.worktreePath, ctx.config, ctx.runAgents))
 
   const unregister = registerCleanup(async () => {
     unmount()
@@ -484,29 +497,78 @@ async function executeComposition(
     cleanupSessionDir(projectRoot, session)
   })
 
+  // Track per-run settled results as they complete
+  const settledResults: (PromiseSettledResult<ExecutionResult> | undefined)[] = new Array(n).fill(undefined)
+
   const promises = worktrees.map((wt, i) => {
-    // For each branch, we need to dispatch based on the branch node type
-    // For simple work or review nodes, we can use agentLoop directly with the branch emitter
     const branchNode = node.branches[i]
     return executeBranchForComposition(branchNode, {
       ...ctx,
       projectRoot: wt.worktreePath,
       cookMD: cookMDs[i],
-    }, pools[i], emitters[i])
+    }, pools[i], emitters[i], abortControllers[i].signal)
   })
 
-  const settled = await Promise.allSettled(promises)
+  // Wrap promises to track individual completion
+  const trackedPromises = promises.map(async (p, i) => {
+    try {
+      const value = await p
+      settledResults[i] = { status: 'fulfilled', value }
+    } catch (reason) {
+      settledResults[i] = { status: 'rejected', reason }
+    }
+  })
+
+  // Wait for all to finish, OR early finish signal
+  await Promise.race([
+    Promise.all(trackedPromises),
+    finishEarlyPromise,
+  ])
+
+  // If early finish was triggered, stop remaining runs
+  const hasUnfinished = settledResults.some(r => r === undefined)
+  if (hasUnfinished) {
+    logStep('Finishing early — stopping remaining runs...')
+    for (let i = 0; i < n; i++) {
+      if (!settledResults[i]) {
+        abortControllers[i].abort()
+        pools[i].stopAll().catch(() => {})
+        emitters[i].emit('error', 'cancelled (finished early)')
+      }
+    }
+    // Wait for killed processes to settle
+    await Promise.all(trackedPromises)
+  }
 
   unmount()
-  try { await waitUntilExit() } catch { /* ok */ }
+  // waitUntilExit may never resolve if unmount() races ahead of ink's
+  // exit() (e.g. early finish unmounts before React processes allDone).
+  // Use a short timeout so we don't hang.
+  await Promise.race([
+    waitUntilExit().catch(() => {}),
+    new Promise<void>(resolve => setTimeout(resolve, 100)),
+  ])
+
+  // Restore stdin after ink's useInput cleanup (it pauses/unrefs stdin,
+  // which breaks subsequent readline prompts like confirm()).
+  // Skip when --yes since no prompts will be shown — leaving stdin
+  // resumed/ref'd would keep the event loop alive and hang the process.
+  if (!ctx.flags.yes) {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false)
+    }
+    process.stdin.resume()
+    process.stdin.ref()
+  }
 
   // Stop all pools
   for (const pool of pools) {
     await pool.stopAll()
   }
 
-  // Commit changes in each worktree
+  // Commit changes in each worktree (skip cancelled runs to avoid committing partial work)
   for (let i = 0; i < n; i++) {
+    if (settledResults[i]?.status !== 'fulfilled') continue
     const wt = worktrees[i]
     try {
       execSync('git add -A', { cwd: wt.worktreePath, stdio: 'pipe' })
@@ -519,17 +581,14 @@ async function executeComposition(
     }
   }
 
-  // Unregister cleanup only after pools stopped and commits done
-  unregister()
-
   // Build results
-  const results: RunResult[] = settled.map((result, i) => ({
+  const results: RunResult[] = settledResults.map((result, i) => ({
     index: i + 1,
-    status: result.status === 'fulfilled' ? 'done' as const : 'error' as const,
-    logFile: result.status === 'fulfilled' ? (result.value.logFile ?? logFiles[i] ?? '') : '',
+    status: result?.status === 'fulfilled' ? 'done' as const : 'error' as const,
+    logFile: result?.status === 'fulfilled' ? (result.value.logFile ?? logFiles[i] ?? '') : '',
     worktreePath: worktrees[i].worktreePath,
     branchName: worktrees[i].branchName,
-    error: result.status === 'rejected' ? String(result.reason) : undefined,
+    error: result?.status === 'rejected' ? String(result.reason) : (result === undefined ? 'cancelled' : undefined),
   }))
 
   // Print summary
@@ -547,19 +606,28 @@ async function executeComposition(
   const successfulRuns = results.filter(r => r.status === 'done')
   if (successfulRuns.length === 0) {
     logErr('All runs failed.')
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, ctx.flags.yes)
+    unregister()
     return { lastMessage: '' }
   }
 
-  // Dispatch to resolver
+  // Dispatch to resolver (keep cleanup registered so Ctrl+C during
+  // confirm prompts still removes worktrees)
+  let resolverResult: ExecutionResult
   switch (node.resolver) {
     case 'pick':
-      return resolvePick(results, successfulRuns, node.criteria, projectRoot, ctx, session)
+      resolverResult = await resolvePick(results, successfulRuns, node.criteria, projectRoot, ctx, session)
+      break
     case 'merge':
-      return resolveMerge(results, successfulRuns, node.criteria ?? 'Combine the best elements.', projectRoot, ctx, session, baseCommit)
+      resolverResult = await resolveMerge(results, successfulRuns, node.criteria ?? 'Combine the best elements.', projectRoot, ctx, session, baseCommit)
+      break
     case 'compare':
-      return resolveCompare(results, successfulRuns, projectRoot, ctx, session, baseCommit)
+      resolverResult = await resolveCompare(results, successfulRuns, projectRoot, ctx, session, baseCommit)
+      break
   }
+
+  unregister()
+  return resolverResult
 }
 
 /**
@@ -571,6 +639,7 @@ async function executeBranchForComposition(
   ctx: ExecutionContext,
   pool: ReturnType<typeof createRunnerPool>,
   emitter: EventEmitter,
+  signal?: AbortSignal,
 ): Promise<ExecutionResult> {
   switch (node.type) {
     case 'work': {
@@ -607,6 +676,7 @@ async function executeBranchForComposition(
         ctx.config.retry,
         (info) => emitter.emit('waiting', info),
         (info) => emitter.emit('retry', info),
+        signal,
       )
 
       try { appendToLog(logFile, 'work', 1, output) } catch { /* ok */ }
@@ -621,7 +691,7 @@ async function executeBranchForComposition(
         workPrompt = node.inner.prompt
       } else {
         // Execute inner node first (e.g., repeat), then review
-        const innerResult = await executeBranchForComposition(node.inner, ctx, pool, emitter)
+        const innerResult = await executeBranchForComposition(node.inner, ctx, pool, emitter, signal)
         workPrompt = node.iteratePrompt ?? 'Continue working on the task based on the review feedback.'
         ctx = { ...ctx, lastMessage: innerResult.lastMessage }
       }
@@ -643,7 +713,7 @@ async function executeBranchForComposition(
         maxRepeatPasses: ctx.maxRepeatPasses,
       }
 
-      const loopResult = await agentLoop(pool.get.bind(pool), loopConfig, ctx.cookMD, emitter)
+      const loopResult = await agentLoop(pool.get.bind(pool), loopConfig, ctx.cookMD, emitter, signal)
       return {
         lastMessage: loopResult.lastMessage,
         logFile: loopResult.logFile,
@@ -660,7 +730,7 @@ async function executeBranchForComposition(
           lastMessage: result.lastMessage,
           repeatPass: pass,
           maxRepeatPasses: node.count,
-        }, pool, emitter)
+        }, pool, emitter, signal)
       }
       return result
     }
@@ -673,7 +743,7 @@ async function executeBranchForComposition(
           lastMessage: result.lastMessage,
           ralphIteration: task,
           maxRalph: node.maxTasks,
-        }, pool, emitter)
+        }, pool, emitter, signal)
 
         // If inner loop hit max iterations without converging, stop ralph
         if (result.verdict === 'MAX_ITERATIONS') {
@@ -704,6 +774,7 @@ async function executeBranchForComposition(
           ctx.config.retry,
           (info) => emitter.emit('waiting', info),
           (info) => emitter.emit('retry', info),
+          signal,
         )
 
         const verdict = parseRalphVerdict(output)
@@ -733,7 +804,7 @@ async function resolvePick(
 ): Promise<ExecutionResult> {
   if (successfulRuns.length === 1) {
     logOK(`Only Run ${successfulRuns[0].index} succeeded — auto-selecting.`)
-    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session)
+    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session, ctx.flags.yes)
     return { lastMessage: `Run ${successfulRuns[0].index} selected` }
   }
 
@@ -760,23 +831,23 @@ async function resolvePick(
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
     }
     await pool.stopAll()
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, ctx.flags.yes)
     return { lastMessage: '' }
   }
   await pool.stopAll()
 
   const winner = parseJudgeVerdict(judgeOutput, results.length)
-  if (winner === null) {
+  if (winner === null || !successfulRuns.some(r => r.index === winner)) {
     logWarn('Pick did not return a clear verdict. You can manually compare:')
     for (const r of successfulRuns) {
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
     }
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, ctx.flags.yes)
     return { lastMessage: '' }
   }
 
   logOK(`Picked Run ${winner}`)
-  await applyAndCleanup(projectRoot, results, winner, session)
+  await applyAndCleanup(projectRoot, results, winner, session, ctx.flags.yes)
   return { lastMessage: `Run ${winner} selected` }
 }
 
@@ -793,7 +864,7 @@ async function resolveMerge(
 ): Promise<ExecutionResult> {
   if (successfulRuns.length === 1) {
     logOK(`Only Run ${successfulRuns[0].index} succeeded — using as merge result.`)
-    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session)
+    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session, ctx.flags.yes)
     return { lastMessage: `Run ${successfulRuns[0].index} selected` }
   }
 
@@ -992,10 +1063,11 @@ async function applyAndCleanup(
   results: RunResult[],
   winner: number,
   session: string,
+  autoYes = false,
 ): Promise<void> {
   const winnerResult = results.find(r => r.index === winner)!
 
-  const shouldApply = await confirm(`\n  Apply Run ${winner} to current branch? [Y/n] `)
+  const shouldApply = autoYes || await confirm(`\n  Apply Run ${winner} to current branch? [Y/n] `)
   if (shouldApply) {
     try {
       execSync(`git merge "${winnerResult.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
@@ -1008,7 +1080,7 @@ async function applyAndCleanup(
       }
       return
     }
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, autoYes)
   } else {
     logStep(`Skipped merge. Winner branch: ${winnerResult.branchName}`)
     logStep(`  To apply later: git merge ${winnerResult.branchName}`)
@@ -1019,8 +1091,9 @@ async function cleanupWorktrees(
   projectRoot: string,
   results: RunResult[],
   session: string,
+  autoYes = false,
 ): Promise<void> {
-  const shouldClean = await confirm(`  Remove worktrees and branches? [Y/n] `)
+  const shouldClean = autoYes || await confirm(`  Remove worktrees and branches? [Y/n] `)
   if (shouldClean) {
     for (const r of results) {
       removeWorktree(projectRoot, r.worktreePath, r.branchName)

@@ -69,16 +69,19 @@ cook "work prompt" "review prompt" "gate prompt" "iterate prompt" N
 ### Composition examples
 
 ```sh
-cook "A" vs "B" pick "criteria"          # two approaches, pick winner
-cook "A" vs "B" merge "best of both"     # synthesize both
-cook "A" vs "B" compare                  # comparison doc only
-cook "A" v3 "criteria"                   # race 3, implicit pick
-cook "A" x3 vs "B" x3 pick "best"       # per-branch loop operators
+cook "A" vs "B" pick "criteria" -y       # two approaches, pick winner
+cook "A" vs "B" merge "best of both" -y  # synthesize both
+cook "A" vs "B" compare                  # comparison doc only (no prompts)
+cook "A" v3 "criteria" -y                # race 3, implicit pick
+cook "A" x3 vs "B" x3 pick "best" -y    # per-branch loop operators
 ```
+
+> **Agents must always pass `-y`** on composition commands to avoid hanging on prompts.
 
 ## Flags
 
 ```
+-y, --yes                      Auto-accept all prompts (REQUIRED for agents)
 --max-iterations N             Max review iterations
 --work-agent AGENT             Per-step agent override
 --review-agent AGENT
@@ -86,6 +89,8 @@ cook "A" x3 vs "B" x3 pick "best"       # per-branch loop operators
 --review-model MODEL
 --hide-request                 Hide the templated request panel
 ```
+
+**IMPORTANT: Always use `-y` when invoking cook as an agent.** Composition commands (v3, vs, pick, merge) prompt for confirmation ("Apply Run N?", "Remove worktrees?"). Without `-y`, the process hangs waiting for interactive input that agents cannot provide. This flag auto-accepts all prompts.
 
 ## Prerequisites
 
