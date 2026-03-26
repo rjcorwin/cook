@@ -571,9 +571,6 @@ async function executeComposition(
     }
   }
 
-  // Unregister cleanup only after pools stopped and commits done
-  unregister()
-
   // Build results
   const results: RunResult[] = settledResults.map((result, i) => ({
     index: i + 1,
@@ -600,18 +597,27 @@ async function executeComposition(
   if (successfulRuns.length === 0) {
     logErr('All runs failed.')
     await cleanupWorktrees(projectRoot, results, session)
+    unregister()
     return { lastMessage: '' }
   }
 
-  // Dispatch to resolver
+  // Dispatch to resolver (keep cleanup registered so Ctrl+C during
+  // confirm prompts still removes worktrees)
+  let resolverResult: ExecutionResult
   switch (node.resolver) {
     case 'pick':
-      return resolvePick(results, successfulRuns, node.criteria, projectRoot, ctx, session)
+      resolverResult = await resolvePick(results, successfulRuns, node.criteria, projectRoot, ctx, session)
+      break
     case 'merge':
-      return resolveMerge(results, successfulRuns, node.criteria ?? 'Combine the best elements.', projectRoot, ctx, session, baseCommit)
+      resolverResult = await resolveMerge(results, successfulRuns, node.criteria ?? 'Combine the best elements.', projectRoot, ctx, session, baseCommit)
+      break
     case 'compare':
-      return resolveCompare(results, successfulRuns, projectRoot, ctx, session, baseCommit)
+      resolverResult = await resolveCompare(results, successfulRuns, projectRoot, ctx, session, baseCommit)
+      break
   }
+
+  unregister()
+  return resolverResult
 }
 
 /**

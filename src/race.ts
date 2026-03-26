@@ -113,6 +113,12 @@ export function confirm(question: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
     let answered = false
+    rl.on('SIGINT', () => {
+      answered = true
+      process.stderr.write('\n')
+      rl.close()
+      resolve(false)
+    })
     rl.question(question, answer => {
       answered = true
       rl.close()
@@ -128,6 +134,12 @@ export function pickOne(question: string, count: number): Promise<number | null>
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   return new Promise(resolve => {
     let answered = false
+    rl.on('SIGINT', () => {
+      answered = true
+      process.stderr.write('\n')
+      rl.close()
+      resolve(null)
+    })
     rl.question(question, answer => {
       answered = true
       rl.close()
