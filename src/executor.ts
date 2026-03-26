@@ -550,12 +550,16 @@ async function executeComposition(
   ])
 
   // Restore stdin after ink's useInput cleanup (it pauses/unrefs stdin,
-  // which breaks subsequent readline prompts like confirm())
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(false)
+  // which breaks subsequent readline prompts like confirm()).
+  // Skip when --yes since no prompts will be shown — leaving stdin
+  // resumed/ref'd would keep the event loop alive and hang the process.
+  if (!ctx.flags.yes) {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false)
+    }
+    process.stdin.resume()
+    process.stdin.ref()
   }
-  process.stdin.resume()
-  process.stdin.ref()
 
   // Stop all pools
   for (const pool of pools) {
