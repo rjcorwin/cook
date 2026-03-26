@@ -36,6 +36,7 @@ export interface ParsedFlags {
   ralphModel?: string
   showRequest: boolean
   noWait: boolean
+  yes: boolean
 }
 
 // --- Reserved keywords and patterns ---
@@ -62,7 +63,7 @@ const VALUE_FLAGS = new Set([
   '--work-model', '--review-model', '--gate-model', '--iterate-model', '--ralph-model',
   '--max-iterations',
 ])
-const BOOLEAN_FLAGS = new Set(['--hide-request', '--no-wait'])
+const BOOLEAN_FLAGS = new Set(['--hide-request', '--no-wait', '--yes'])
 
 export function separateFlags(args: string[]): { flags: Record<string, string>; positional: string[] } {
   const flags: Record<string, string> = {}
@@ -70,7 +71,11 @@ export function separateFlags(args: string[]): { flags: Record<string, string>; 
 
   let i = 0
   while (i < args.length) {
-    if (args[i].startsWith('--')) {
+    if (args[i] === '-y') {
+      flags['--yes'] = 'true'
+    } else if (args[i] === '-h') {
+      flags['--help'] = 'true'
+    } else if (args[i].startsWith('--')) {
       const flag = args[i]
       if (flag.includes('=')) {
         const [key, ...rest] = flag.split('=')
@@ -117,6 +122,7 @@ export function buildParsedFlags(flags: Record<string, string>): ParsedFlags {
     ralphModel: flags['--ralph-model'],
     showRequest: flags['--hide-request'] !== 'true',
     noWait: flags['--no-wait'] === 'true',
+    yes: flags['--yes'] === 'true',
   }
 }
 

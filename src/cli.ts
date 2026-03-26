@@ -94,6 +94,7 @@ ${BOLD}Options:${RESET}
   --sandbox MODE                  Sandbox mode (agent|docker, default: agent)
   --no-wait                       Disable rate-limit retry (fail fast)
   --hide-request                  Hide the templated request for each step
+  -y, --yes                       Auto-accept all prompts (non-interactive mode)
   -h, --help                      Show this help`)
   process.exit(1)
 }

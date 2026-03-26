@@ -602,7 +602,7 @@ async function executeComposition(
   const successfulRuns = results.filter(r => r.status === 'done')
   if (successfulRuns.length === 0) {
     logErr('All runs failed.')
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, ctx.flags.yes)
     unregister()
     return { lastMessage: '' }
   }
@@ -800,7 +800,7 @@ async function resolvePick(
 ): Promise<ExecutionResult> {
   if (successfulRuns.length === 1) {
     logOK(`Only Run ${successfulRuns[0].index} succeeded — auto-selecting.`)
-    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session)
+    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session, ctx.flags.yes)
     return { lastMessage: `Run ${successfulRuns[0].index} selected` }
   }
 
@@ -827,7 +827,7 @@ async function resolvePick(
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
     }
     await pool.stopAll()
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, ctx.flags.yes)
     return { lastMessage: '' }
   }
   await pool.stopAll()
@@ -838,12 +838,12 @@ async function resolvePick(
     for (const r of successfulRuns) {
       logStep(`  Run ${r.index}: git diff HEAD...${r.branchName}`)
     }
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, ctx.flags.yes)
     return { lastMessage: '' }
   }
 
   logOK(`Picked Run ${winner}`)
-  await applyAndCleanup(projectRoot, results, winner, session)
+  await applyAndCleanup(projectRoot, results, winner, session, ctx.flags.yes)
   return { lastMessage: `Run ${winner} selected` }
 }
 
@@ -860,7 +860,7 @@ async function resolveMerge(
 ): Promise<ExecutionResult> {
   if (successfulRuns.length === 1) {
     logOK(`Only Run ${successfulRuns[0].index} succeeded — using as merge result.`)
-    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session)
+    await applyAndCleanup(projectRoot, results, successfulRuns[0].index, session, ctx.flags.yes)
     return { lastMessage: `Run ${successfulRuns[0].index} selected` }
   }
 
@@ -1059,10 +1059,11 @@ async function applyAndCleanup(
   results: RunResult[],
   winner: number,
   session: string,
+  autoYes = false,
 ): Promise<void> {
   const winnerResult = results.find(r => r.index === winner)!
 
-  const shouldApply = await confirm(`\n  Apply Run ${winner} to current branch? [Y/n] `)
+  const shouldApply = autoYes || await confirm(`\n  Apply Run ${winner} to current branch? [Y/n] `)
   if (shouldApply) {
     try {
       execSync(`git merge "${winnerResult.branchName}" --no-edit`, { cwd: projectRoot, stdio: 'pipe' })
@@ -1075,7 +1076,7 @@ async function applyAndCleanup(
       }
       return
     }
-    await cleanupWorktrees(projectRoot, results, session)
+    await cleanupWorktrees(projectRoot, results, session, autoYes)
   } else {
     logStep(`Skipped merge. Winner branch: ${winnerResult.branchName}`)
     logStep(`  To apply later: git merge ${winnerResult.branchName}`)
@@ -1086,8 +1087,9 @@ async function cleanupWorktrees(
   projectRoot: string,
   results: RunResult[],
   session: string,
+  autoYes = false,
 ): Promise<void> {
-  const shouldClean = await confirm(`  Remove worktrees and branches? [Y/n] `)
+  const shouldClean = autoYes || await confirm(`  Remove worktrees and branches? [Y/n] `)
   if (shouldClean) {
     for (const r of results) {
       removeWorktree(projectRoot, r.worktreePath, r.branchName)
