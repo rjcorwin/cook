@@ -541,7 +541,13 @@ async function executeComposition(
   }
 
   unmount()
-  try { await waitUntilExit() } catch { /* ok */ }
+  // waitUntilExit may never resolve if unmount() races ahead of ink's
+  // exit() (e.g. early finish unmounts before React processes allDone).
+  // Use a short timeout so we don't hang.
+  await Promise.race([
+    waitUntilExit().catch(() => {}),
+    new Promise<void>(resolve => setTimeout(resolve, 100)),
+  ])
 
   // Restore stdin after ink's useInput cleanup (it pauses/unrefs stdin,
   // which breaks subsequent readline prompts like confirm())
