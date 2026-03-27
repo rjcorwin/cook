@@ -36,6 +36,17 @@ mkdir -p .claude/skills && cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/s
 
 Requires Node.js 20+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode).
 
+## Commands
+
+```sh
+cook init                           # Set up COOK.md, config, and Dockerfile
+cook rebuild                        # Rebuild the sandbox Docker image
+cook doctor                         # Check Docker + auth readiness
+cook shell                          # Interactive shell in Docker sandbox
+cook shell <command>                # Run a command in the sandbox
+cook shell --unrestricted           # Shell with unrestricted networking
+```
+
 ## Primitives
 
 **Work** — a prompt string. One agent call.

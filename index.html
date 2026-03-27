@@ -752,6 +752,43 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
         <p><strong>Note:</strong> OpenCode is only supported in Docker mode.</p>
       </blockquote>
 
+      <h3>Commands</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>cook init</code></td>
+            <td>Scaffold COOK.md, .cook/config.json, and Dockerfile</td>
+          </tr>
+          <tr>
+            <td><code>cook rebuild</code></td>
+            <td>Rebuild the sandbox Docker image</td>
+          </tr>
+          <tr>
+            <td><code>cook doctor</code></td>
+            <td>Check Docker daemon, CLI tools, and auth credentials</td>
+          </tr>
+          <tr>
+            <td><code>cook shell</code></td>
+            <td>Interactive shell in the Docker sandbox</td>
+          </tr>
+          <tr>
+            <td><code>cook shell &lt;cmd&gt;</code></td>
+            <td>Run a command in the sandbox</td>
+          </tr>
+          <tr>
+            <td><code>cook shell --unrestricted</code></td>
+            <td>Shell with unrestricted networking</td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3>Rate-limit recovery</h3>
       <p>When an agent hits a token quota or rate limit, cook automatically waits and retries instead of bailing. A countdown is shown in the TUI. Enabled by default.</p>
 
