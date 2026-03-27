@@ -10,6 +10,7 @@ import { DEFAULT_COOK_MD, loadCookMD } from './template.js'
 import { logPhase, logStep, logOK, logErr, logWarn, BOLD, RESET } from './log.js'
 import { parse, separateFlags, buildParsedFlags, type ParsedFlags } from './parser.js'
 import { execute, cleanupActiveExecutions, type ExecutionContext } from './executor.js'
+import { hasCommandOnPath, findProjectRoot } from './util.js'
 
 const DEFAULT_COOK_CONFIG_JSON = `{
   "agent": "claude",
@@ -47,14 +48,6 @@ process.on('SIGTERM', async () => {
   process.exit(1)
 })
 
-function findProjectRoot(): string {
-  try {
-    return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim()
-  } catch {
-    return process.cwd()
-  }
-}
-
 function usage(): void {
   console.error(`${BOLD}cook${RESET} — sandboxed agent loop
 
@@ -69,6 +62,9 @@ ${BOLD}Usage:${RESET}
   cook "A" vs "B" pick "criteria"     Fork-join: two approaches
   cook "A" vs "B" merge "criteria"    Fork-join: synthesize best parts
   cook "A" vs "B" compare             Fork-join: comparison document
+  cook shell                          Open interactive shell in sandbox
+  cook shell <command>                Run command in sandbox
+  cook shell --unrestricted           Shell with unrestricted networking
   cook init                           Set up COOK.md, config, and Dockerfile
   cook rebuild                        Rebuild the sandbox Docker image
   cook doctor                         Check Docker + auth readiness
@@ -236,64 +232,6 @@ function hasFile(file: string): boolean {
   }
 }
 
-function stripSurroundingQuotes(value: string): string {
-  return value.length >= 2 && value.startsWith('"') && value.endsWith('"')
-    ? value.slice(1, -1)
-    : value
-}
-
-function isRunnableFile(file: string): boolean {
-  try {
-    const stat = fs.statSync(file)
-    if (!stat.isFile()) return false
-    if (process.platform !== 'win32') {
-      fs.accessSync(file, fs.constants.X_OK)
-    }
-    return true
-  } catch {
-    return false
-  }
-}
-
-function commandCandidates(command: string): string[] {
-  if (process.platform !== 'win32') return [command]
-  if (path.extname(command)) return [command]
-
-  const pathExt = process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD'
-  const exts = pathExt
-    .split(';')
-    .map(ext => ext.trim())
-    .filter(Boolean)
-
-  return [command, ...exts.map(ext => `${command}${ext}`)]
-}
-
-// `cook doctor` should inspect PATH state without spawning extra executables.
-function hasCommandOnPath(command: string): boolean {
-  if (!command.trim()) return false
-
-  const isDirectPath = path.isAbsolute(command) || command.includes('/') || command.includes('\\')
-  if (isDirectPath) {
-    return commandCandidates(command).some(isRunnableFile)
-  }
-
-  const rawPath = process.env.PATH ?? process.env.Path ?? ''
-  const pathEntries = rawPath
-    .split(path.delimiter)
-    .map(entry => entry.trim())
-    .filter(Boolean)
-    .map(entry => process.platform === 'win32' ? stripSurroundingQuotes(entry) : entry)
-
-  for (const entry of pathEntries) {
-    const base = path.join(entry, command)
-    if (commandCandidates(base).some(isRunnableFile)) {
-      return true
-    }
-  }
-
-  return false
-}
-
 function hostClaudeLoggedIn(): boolean {
   try {
     const out = execSync('claude auth status', { encoding: 'utf8' }).trim()
@@ -442,6 +380,11 @@ async function main() {
   switch (command) {
     case 'init':    cmdInit(findProjectRoot()); break
     case 'rebuild': await cmdRebuild(); break
+    case 'shell': {
+      const { cmdShell } = await import('./shell.js')
+      await cmdShell(args.slice(1))
+      break
+    }
     case 'doctor':  await cmdDoctor(args.slice(1)); break
     case 'help':
     case '--help':
