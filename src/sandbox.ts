@@ -2,7 +2,7 @@ import Docker from 'dockerode'
 import { pack } from 'tar-stream'
 import { PassThrough, type Readable } from 'stream'
 import { createHash } from 'crypto'
-import { execSync } from 'child_process'
+import { execSync, spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -70,11 +70,11 @@ async function containerExec(container: Docker.Container, user: string, cmd: str
   }
 }
 
-async function ensureBaseImage(docker: Docker): Promise<void> {
+async function ensureBaseImage(docker: Docker, verbose = false): Promise<void> {
   const exists = await imageExists(docker, BASE_IMAGE_NAME)
   if (exists) return
   logStep('Building sandbox image (first run)...')
-  await buildImage(docker, BASE_IMAGE_NAME, BASE_DOCKERFILE, false)
+  await buildImage(docker, BASE_IMAGE_NAME, BASE_DOCKERFILE, verbose)
 }
 
 async function buildImage(docker: Docker, imageName: string, dockerfile: string, verbose: boolean): Promise<void> {
@@ -134,6 +134,19 @@ async function cleanupStaleContainers(docker: Docker, projectRoot: string): Prom
       }
     }
   }
+}
+
+/**
+ * Check if a cook container is already running for the given project.
+ * Distinct from cleanupStaleContainers which removes ALL containers (running or stopped).
+ * This only checks for running containers to detect active sessions.
+ */
+export async function hasCookContainer(docker: Docker, projectRoot: string): Promise<boolean> {
+  const containers = await docker.listContainers({
+    filters: { label: [`cook.project=${projectRoot}`], status: ['running'] },
+  })
+  // Match cleanupStaleContainers: also require the /cook- name prefix
+  return containers.some(info => info.Names.some(name => name.startsWith('/cook-')))
 }
 
 async function copyFileToContainer(container: Docker.Container, hostPath: string, containerPath: string): Promise<void> {
@@ -343,6 +356,60 @@ export class Sandbox implements AgentRunner {
     return runAgent(this.container, this.docker, agent, model, prompt, this.userSpec, this.env, this.projectRoot, onLine)
   }
 
+  /**
+   * Spawn an interactive shell (or run a command) inside the sandbox container.
+   * Uses async spawn + promise (NOT spawnSync) so cleanup handlers and signal
+   * forwarding work during long-lived shell sessions.
+   *
+   * Note: this.projectRoot is used as the working directory inside the container.
+   * This works because startSandbox bind-mounts projectRoot:projectRoot (same path
+   * on host and in container).
+   */
+  async shell(args: string[]): Promise<number> {
+    const execArgs = ['exec']
+
+    if (process.stdin.isTTY) {
+      execArgs.push('-i', '-t')
+    } else {
+      execArgs.push('-i')
+    }
+
+    execArgs.push('-w', this.projectRoot)
+    execArgs.push('-u', this.userSpec)
+
+    for (const envVar of this.env) {
+      execArgs.push('-e', envVar)
+    }
+    execArgs.push('-e', 'HOME=/home/cook')
+    execArgs.push(this.container.id)
+
+    if (args.length > 0) {
+      execArgs.push(...args)
+    } else {
+      execArgs.push('bash')
+    }
+
+    const child = spawn('docker', execArgs, { stdio: 'inherit' })
+
+    return new Promise<number>((resolve, reject) => {
+      child.on('error', reject)
+      child.on('close', (code, signal) => {
+        if (code !== null) {
+          resolve(code)
+        } else if (signal) {
+          // Map signal-killed process to 128+signal (Unix convention)
+          const signalCodes: Record<string, number> = {
+            SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGABRT: 6,
+            SIGKILL: 9, SIGTERM: 15,
+          }
+          resolve(128 + (signalCodes[signal] ?? 1))
+        } else {
+          resolve(1)
+        }
+      })
+    })
+  }
+
   async stop(): Promise<void> {
     this.aborted = true
     await this.container.remove({ force: true }).catch(() => {})
@@ -350,7 +417,7 @@ export class Sandbox implements AgentRunner {
   }
 }
 
-export async function startSandbox(docker: Docker, projectRoot: string, env: string[], dockerConfig: DockerConfig, agents: AgentName[]): Promise<Sandbox> {
+export async function startSandbox(docker: Docker, projectRoot: string, env: string[], dockerConfig: DockerConfig, agents: AgentName[], verbose = false): Promise<Sandbox> {
   try {
     await docker.ping()
   } catch {
@@ -358,8 +425,12 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
     process.exit(1)
   }
 
+  // cleanupStaleContainers removes stopped containers from previous sessions.
+  // The caller (e.g., cmdShell) should check for running containers first to
+  // avoid killing an active agent loop. Removing stopped containers here is
+  // intentional — they are leftovers that would cause name collisions.
   await cleanupStaleContainers(docker, projectRoot)
-  await ensureBaseImage(docker)
+  await ensureBaseImage(docker, verbose)
   if (agents.includes('claude') && !hasClaudeContainerCredentials(env)) {
     logWarn('Claude selected but ~/.claude/.credentials.json is missing on host. OAuth/keychain-only logins usually do not transfer to Linux containers; run `claude setup-token` on host.')
   }
