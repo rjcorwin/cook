@@ -62,7 +62,7 @@ ${BOLD}Usage:${RESET}
   cook "A" vs "B" pick "criteria"     Fork-join: two approaches
   cook "A" vs "B" merge "criteria"    Fork-join: synthesize best parts
   cook "A" vs "B" compare             Fork-join: comparison document
-  cook shell                          Open interactive shell in sandbox
+  cook shell / sandbox                Open interactive shell in sandbox
   cook shell <command>                Run command in sandbox
   cook shell --unrestricted           Shell with unrestricted networking
   cook init                           Set up COOK.md, config, and Dockerfile
@@ -380,7 +380,8 @@ async function main() {
   switch (command) {
     case 'init':    cmdInit(findProjectRoot()); break
     case 'rebuild': await cmdRebuild(); break
-    case 'shell': {
+    case 'shell':
+    case 'sandbox': {
       const { cmdShell } = await import('./shell.js')
       await cmdShell(args.slice(1))
       break

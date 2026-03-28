@@ -36,13 +36,35 @@ mkdir -p .claude/skills && cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/s
 
 Requires Node.js 20+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode).
 
+### Docker network
+
+By default, Docker sandbox restricts outbound traffic to only what each agent requires. Configure in `.cook/config.json`:
+
+```json
+{
+  "docker": {
+    "network": {
+      "mode": "restricted",
+      "allowedHosts": ["api.mycompany.com"]
+    }
+  }
+}
+```
+
+| `mode` | Behavior |
+|--------|----------|
+| `"restricted"` (default) | Blocks all outbound traffic except DNS and HTTPS to a whitelist of required agent hosts |
+| `"unrestricted"` | No network restrictions |
+
+`allowedHosts` adds extra hosts to the whitelist when mode is `"restricted"`.
+
 ## Commands
 
 ```sh
 cook init                           # Set up COOK.md, config, and Dockerfile
 cook rebuild                        # Rebuild the sandbox Docker image
 cook doctor                         # Check Docker + auth readiness
-cook shell                          # Interactive shell in Docker sandbox
+cook shell / sandbox                # Interactive shell in Docker sandbox
 cook shell <command>                # Run a command in the sandbox
 cook shell --unrestricted           # Shell with unrestricted networking
 ```

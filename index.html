@@ -752,6 +752,39 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
         <p><strong>Note:</strong> OpenCode is only supported in Docker mode.</p>
       </blockquote>
 
+      <h3>Docker Network</h3>
+      <p>By default, Docker sandbox restricts outbound traffic to only what each agent requires. Configure in <code>.cook/config.json</code>:</p>
+
+      <pre><code>{
+  <span class="str">"docker"</span>: {
+    <span class="str">"network"</span>: {
+      <span class="str">"mode"</span>: <span class="str">"restricted"</span>,
+      <span class="str">"allowedHosts"</span>: [<span class="str">"api.mycompany.com"</span>]
+    }
+  }
+}</code></pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>mode</th>
+            <th>Behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>"restricted"</code> (default)</td>
+            <td>Blocks all outbound traffic except DNS and HTTPS to a whitelist of required agent hosts.</td>
+          </tr>
+          <tr>
+            <td><code>"unrestricted"</code></td>
+            <td>No network restrictions.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><code>allowedHosts</code> adds extra hosts to the whitelist when mode is <code>"restricted"</code>.</p>
+
       <h3>Commands</h3>
 
       <table>
@@ -775,7 +808,7 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
             <td>Check Docker daemon, CLI tools, and auth credentials</td>
           </tr>
           <tr>
-            <td><code>cook shell</code></td>
+            <td><code>cook shell</code> / <code>cook sandbox</code></td>
             <td>Interactive shell in the Docker sandbox</td>
           </tr>
           <tr>
