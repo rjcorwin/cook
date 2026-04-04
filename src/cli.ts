@@ -149,7 +149,7 @@ function defaultModelForAgent(agent: AgentName): string {
     case 'claude': return 'opus'
     case 'codex': return 'gpt-5-codex'
     case 'opencode': return 'gpt-5'
-    case 'pi': return 'sonnet'
+    case 'pi': return 'google/gemini-2.0-flash'
   }
 }
 
@@ -298,7 +298,7 @@ function checkPiAuth(config: CookConfig): { ok: boolean; msg: string } {
   if (hasFile(path.join(home, '.pi', 'agent', 'auth.json'))) {
     return { ok: true, msg: 'Pi auth: ~/.pi/agent/auth.json found (portable)' }
   }
-  const providerEnvVars = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY']
+  const providerEnvVars = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY']
   let blockedKey: string | null = null
   for (const name of providerEnvVars) {
     if (!process.env[name]) continue
@@ -310,7 +310,7 @@ function checkPiAuth(config: CookConfig): { ok: boolean; msg: string } {
   if (blockedKey !== null) {
     return { ok: false, msg: `Pi auth: ${blockedKey} is set but missing from .cook/config.json env passthrough` }
   }
-  return { ok: false, msg: 'Pi auth: no credentials detected. Run `pi /login` or set ANTHROPIC_API_KEY/OPENAI_API_KEY/GOOGLE_API_KEY.' }
+  return { ok: false, msg: 'Pi auth: no credentials detected. Run `pi /login` or set ANTHROPIC_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY.' }
 }
 
 async function cmdDoctor(args: string[]): Promise<void> {

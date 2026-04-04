@@ -33,11 +33,17 @@
 
 **`index.html` title/tagline/note** — Three references to the agent list were missed in the initial assembly. Fixed title tag, hero tagline paragraph, and agents table Docker-only blockquote note.
 
+## Fixes from Live Testing
+
+**Default model `'google/gemini-2.0-flash'`** — `'sonnet'` was rejected at runtime. Pi defaults to the `google` provider and requires a provider-prefixed model ID. Fixed to `'google/gemini-2.0-flash'`, which is Pi's own default.
+
+**`GEMINI_API_KEY` (not `GOOGLE_API_KEY`)** — Pi's provider docs list `GEMINI_API_KEY` as the env var for Google Gemini. All references in `cli.ts` and `sandbox.ts` updated. Also found during testing: stale project-specific Docker image (`cook-project-*`) after `cook rebuild` — it doesn't inherit the new base automatically in this case; Docker layer cache invalidation requires the project image to be manually removed or cook rebuild to also purge project images.
+
 ## Tricky Parts
 
-- **Branch 7's `index.html`** had a false claim: "Pi is supported in both agent and Docker modes." This was corrected to Docker-only before inclusion, consistent with the native runner rejection and branch 3's approach.
-- **Model name format** remains an open question — `'sonnet'` may need to be `'anthropic/claude-sonnet-4-5'` depending on how Pi resolves bare model names. Needs manual verification.
+- **Branch 7's `index.html`** had a false claim: "Pi is supported in both agent and Docker modes." Corrected to Docker-only before inclusion.
+- **Free tier rate limits** — Google AI Studio API keys are limited to 15 RPM. Pi handles this gracefully (retries with backoff), but coding tasks hit the limit quickly. Recommended setup is `pi /login` with Gemini CLI OAuth (free, much higher limits).
 
 ## Open Items
 
-- Verify Pi CLI accepts bare `'sonnet'` as a model name, or determine the correct provider-prefixed default.
+- `cook rebuild` should also remove stale project-specific images (`cook-project-*`) to avoid the stale image problem.

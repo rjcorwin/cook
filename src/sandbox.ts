@@ -210,7 +210,7 @@ function hasOpencodeContainerCredentials(env: string[]): boolean {
 function hasPiContainerCredentials(env: string[]): boolean {
   const home = os.homedir()
   if (fs.existsSync(path.join(home, '.pi', 'agent', 'auth.json'))) return true
-  for (const name of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY']) {
+  for (const name of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY']) {
     if (process.env[name] && env.includes(name)) return true
   }
   return false
@@ -459,7 +459,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
     logWarn('OpenCode selected but no container-usable credentials found. Add ~/.local/share/opencode/auth.json or set OPENAI_API_KEY/ANTHROPIC_API_KEY and include it in .cook.config.json env passthrough.')
   }
   if (agents.includes('pi') && !hasPiContainerCredentials(env)) {
-    logWarn('Pi selected but no container-usable credentials found. Add ~/.pi/agent/auth.json or set ANTHROPIC_API_KEY/OPENAI_API_KEY/GOOGLE_API_KEY and include it in .cook/config.json env passthrough.')
+    logWarn('Pi selected but no container-usable credentials found. Add ~/.pi/agent/auth.json or set ANTHROPIC_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY and include it in .cook/config.json env passthrough.')
   }
 
   const projImage = getProjectImageTag(projectRoot)

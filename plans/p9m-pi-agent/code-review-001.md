@@ -26,12 +26,18 @@ Three parallel reviews were run covering code correctness, security/sandbox enfo
 
 **`index.html` missing Pi in title, tagline, and Docker-only note** (`index.html:6, 525, 757`) — The `<title>`, hero tagline, and agents table blockquote all still said "Claude Code, Codex, and OpenCode". The Pi example block was added but these three references were missed. Fixed.
 
-### Open
+### Fixed (during live testing)
 
-**Default model name format** (`src/cli.ts:152`) — `defaultModelForAgent('pi')` returns `'sonnet'`. Pi may require a provider-prefixed format (e.g. `'anthropic/claude-sonnet-4-5'`) rather than a bare shorthand. Two of the seven race branches used a prefixed format. Needs verification by running `pi --model sonnet -p` and observing whether it errors. If Pi requires a prefix, this is a silent runtime failure.
+**Default model name** (`src/cli.ts:152`) — `'sonnet'` is not a valid Pi model. Pi's `--provider` defaults to `google`, and Google has no model named "sonnet". Confirmed by running Pi in Docker: it errors immediately. Fixed to `'google/gemini-2.0-flash'`, which is Pi's actual default provider and model.
+
+**`GOOGLE_API_KEY` → `GEMINI_API_KEY`** (`src/cli.ts`, `src/sandbox.ts`) — Pi's provider docs confirm the correct env var for Google Gemini is `GEMINI_API_KEY`, not `GOOGLE_API_KEY`. All four references updated. The `checkPiAuth()` and `hasPiContainerCredentials()` checks and warning messages were all using the wrong variable name.
 
 ## Non-Issues Confirmed
 
 - `hasPiContainerCredentials()` only checks `auth.json` (not `models.json`/`settings.json`) — correct, those are config files not auth files. The credential check is auth-only by design.
 - No Pi case in `nativeAuthHint()` — intentional, see above.
-- `GOOGLE_API_KEY` env passthrough requires explicit user configuration — correct security behavior, not a gap.
+- Stale project image after `cook rebuild` — expected Docker behavior; users need to remove the project-specific image manually or `cook rebuild` should handle it (separate issue).
+
+## Live Test Result
+
+Pi ran successfully end-to-end: doctor passed, Docker image built, container started, network restricted to three provider hosts, Pi binary found and executed, Google API authenticated. Run was killed early due to free-tier rate limits (15 RPM on AI Studio keys). Recommended auth path: `pi /login` with Gemini CLI subscription (free, higher limits, uses OAuth via `auth.json`).
