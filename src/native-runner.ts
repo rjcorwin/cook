@@ -75,7 +75,8 @@ export class NativeRunner implements AgentRunner {
         }
         if (code !== 0) {
           const stderrText = Buffer.concat(stderrChunks).toString()
-          const err = new Error(`${agent} exited ${code}: ${stderrText}`) as Error & { stdout: string }
+          const authHint = nativeAuthHint(agent, stderrText)
+          const err = new Error(`${agent} exited ${code}: ${stderrText}${authHint}`) as Error & { stdout: string }
           err.stdout = output
           reject(err)
         } else {
@@ -128,4 +129,15 @@ export class NativeRunner implements AgentRunner {
         throw new Error(`Unsupported agent for native runner: ${agent}`)
     }
   }
+}
+
+function nativeAuthHint(agent: AgentName, stderrText: string): string {
+  const lower = stderrText.toLowerCase()
+  if (agent === 'claude' && (lower.includes('not logged in') || lower.includes('auth') || lower.includes('credentials'))) {
+    return ' Hint: run `claude auth login` or set CLAUDE_CODE_OAUTH_TOKEN.'
+  }
+  if (agent === 'codex' && (lower.includes('auth') || lower.includes('api key'))) {
+    return ' Hint: set OPENAI_API_KEY or run codex login.'
+  }
+  return ''
 }
