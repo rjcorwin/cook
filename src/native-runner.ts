@@ -28,6 +28,9 @@ export class NativeRunner implements AgentRunner {
     if (agent === 'opencode') {
       throw new Error('opencode is not supported in native mode — it has no OS-level sandbox. Use --sandbox docker instead.')
     }
+    if (agent === 'pi') {
+      throw new Error('pi is not supported in native mode — it has no OS-level sandbox. Use --sandbox docker instead.')
+    }
 
     const { cmd, args } = this.buildCommand(agent, model)
     const envVars: Record<string, string> = { ...process.env } as Record<string, string>

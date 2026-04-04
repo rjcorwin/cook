@@ -75,7 +75,7 @@ ${BOLD}Options:${RESET}
   --gate PROMPT                   Override gate step prompt
   --iterate PROMPT                Override iterate step prompt
   --max-iterations N              Max review iterations (default: 3)
-  --agent AGENT                   Default agent (claude|codex|opencode)
+  --agent AGENT                   Default agent (claude|codex|opencode|pi)
   --model MODEL                   Default model (for default agent)
   --work-agent AGENT              Work step agent override
   --review-agent AGENT            Review step agent override
@@ -137,10 +137,10 @@ async function cmdRebuild(): Promise<void> {
 
 function parseAgent(value: string | undefined, fallback: AgentName): AgentName {
   const normalized = (value ?? fallback).toLowerCase()
-  if (normalized === 'claude' || normalized === 'codex' || normalized === 'opencode') {
+  if (normalized === 'claude' || normalized === 'codex' || normalized === 'opencode' || normalized === 'pi') {
     return normalized
   }
-  console.error(`Error: invalid agent "${value}". Expected one of: claude, codex, opencode.`)
+  console.error(`Error: invalid agent "${value}". Expected one of: claude, codex, opencode, pi.`)
   process.exit(1)
 }
 
@@ -149,6 +149,7 @@ function defaultModelForAgent(agent: AgentName): string {
     case 'claude': return 'opus'
     case 'codex': return 'gpt-5-codex'
     case 'opencode': return 'gpt-5'
+    case 'pi': return 'sonnet'
   }
 }
 
@@ -292,6 +293,22 @@ function checkOpencodeAuth(config: CookConfig): { ok: boolean; msg: string } {
   return { ok: false, msg: 'OpenCode auth: no credentials detected. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.' }
 }
 
+function checkPiAuth(config: CookConfig): { ok: boolean; msg: string } {
+  const home = os.homedir()
+  if (hasFile(path.join(home, '.pi', 'agent', 'auth.json'))) {
+    return { ok: true, msg: 'Pi auth: ~/.pi/agent/auth.json found (portable)' }
+  }
+  const providerEnvVars = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY']
+  for (const name of providerEnvVars) {
+    if (!process.env[name]) continue
+    if (envPassesThrough(config, name)) {
+      return { ok: true, msg: `Pi auth: ${name} set and passed through` }
+    }
+    return { ok: false, msg: `Pi auth: ${name} is set but missing from .cook/config.json env passthrough` }
+  }
+  return { ok: false, msg: 'Pi auth: no credentials detected. Run `pi /login` or set ANTHROPIC_API_KEY/OPENAI_API_KEY/GOOGLE_API_KEY.' }
+}
+
 async function cmdDoctor(args: string[]): Promise<void> {
   logPhase('Cook doctor')
 
@@ -339,7 +356,17 @@ async function cmdDoctor(args: string[]): Promise<void> {
 
   if (usedModes.has('agent')) {
     for (const agent of plan.runAgents) {
-      if (agent === 'opencode') continue
+      if (agent === 'opencode' || agent === 'pi') {
+        // Check if this agent is actually used in a step with agent sandbox mode
+        const usedInAgentMode = ALL_STEP_NAMES.some(
+          step => plan.stepConfig[step].agent === agent && plan.stepConfig[step].sandbox === 'agent'
+        )
+        if (usedInAgentMode) {
+          allGood = false
+          logErr(`${agent} is not supported in native (agent) sandbox mode. Set --sandbox docker or configure sandbox: "docker" for the relevant steps.`)
+        }
+        continue
+      }
       if (hasCommandOnPath(agent)) {
         logOK(`${agent} CLI found on PATH`)
       } else {
@@ -354,6 +381,8 @@ async function cmdDoctor(args: string[]): Promise<void> {
       ? checkClaudeAuth(config, usedModes)
       : agent === 'codex'
       ? checkCodexAuth(config)
+      : agent === 'pi'
+      ? checkPiAuth(config)
       : checkOpencodeAuth(config)
     if (result.ok) {
       logOK(result.msg)

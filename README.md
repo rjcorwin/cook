@@ -1,6 +1,6 @@
 # cook
 
-A simple CLI for orchestrating Claude Code, Codex, and OpenCode.
+A simple CLI for orchestrating Claude Code, Codex, OpenCode, and Pi.
 
 ```sh
 # review loop
@@ -34,7 +34,7 @@ npm install -g @let-it-cook/cli
 mkdir -p .claude/skills && cp -r $(npm root -g)/@let-it-cook/cli/skill .claude/skills/cook
 ```
 
-Requires Node.js 20+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [OpenCode](https://github.com/opencode-ai/opencode).
+Requires Node.js 20+ and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://github.com/opencode-ai/opencode), or [Pi](https://pi.dev/).
 
 ### Docker network
 

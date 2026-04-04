@@ -7,7 +7,7 @@ argument-hint: "<prompt>" [operators...] [flags...]
 
 # Cook — Agent Orchestration CLI
 
-`cook` wraps your coding agent (Claude Code, Codex, OpenCode) in composable workflows: review loops, repeat passes, parallel races, and task-list orchestration.
+`cook` wraps your coding agent (Claude Code, Codex, OpenCode, Pi) in composable workflows: review loops, repeat passes, parallel races, and task-list orchestration.
 
 **Important: Never use `--sandbox none`.** The default sandbox mode (`agent`) is correct when running as a skill. It preserves the parent agent's security boundaries.
 

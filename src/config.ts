@@ -5,7 +5,7 @@ import type { SandboxMode } from './runner.js'
 import { DEFAULT_RETRY_CONFIG, type RetryConfig } from './retry.js'
 
 export type AnimationStyle = 'flame' | 'strip' | 'campfire' | 'pot' | 'pulse'
-export type AgentName = 'claude' | 'codex' | 'opencode'
+export type AgentName = 'claude' | 'codex' | 'opencode' | 'pi'
 export type StepName = 'work' | 'review' | 'gate' | 'iterate' | 'ralph'
 
 export interface StepAgentConfig {
@@ -42,7 +42,7 @@ function isAnimationStyle(value: unknown): value is AnimationStyle {
 }
 
 function isAgentName(value: unknown): value is AgentName {
-  return value === 'claude' || value === 'codex' || value === 'opencode'
+  return value === 'claude' || value === 'codex' || value === 'opencode' || value === 'pi'
 }
 
 function isSandboxMode(value: unknown): value is SandboxMode {
