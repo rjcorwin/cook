@@ -13,7 +13,7 @@ import { LineBuffer } from './line-buffer.js'
 
 const BASE_DOCKERFILE = `FROM node:22-slim
 RUN npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai @mariozechner/pi-coding-agent
-RUN apt-get update && apt-get install -y git iptables && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git iptables fd-find && ln -s $(which fdfind) /usr/local/bin/fd && rm -rf /var/lib/apt/lists/*
 `
 
 const BASE_IMAGE_NAME = 'cook-sandbox'
@@ -236,7 +236,13 @@ function requiredHostsForAgent(agent: AgentName): string[] {
       return ['api.openai.com', 'api.anthropic.com', 'api.opencode.ai']
     case 'pi':
       // pi supports many providers; allow the most common API hosts.
-      return ['api.anthropic.com', 'api.openai.com', 'generativelanguage.googleapis.com']
+      // cloudcode-pa.googleapis.com + accounts.google.com are required for Gemini CLI OAuth.
+      // github.com + raw.githubusercontent.com are required for Pi's update check and schema fetches.
+      return [
+        'api.anthropic.com', 'api.openai.com',
+        'generativelanguage.googleapis.com', 'cloudcode-pa.googleapis.com', 'accounts.google.com',
+        'github.com', 'api.github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com',
+      ]
   }
 }
 
