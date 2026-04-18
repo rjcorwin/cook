@@ -118,7 +118,7 @@ function getProjectImageTag(projectRoot: string): { imageName: string, dockerfil
   const hash = createHash('sha256').update(data).digest('hex').slice(0, 12)
   const projectName = path.basename(projectRoot)
   return {
-    imageName: `cook-project-${projectName}:${hash}`,
+    imageName: `cook-project-${projectName.toLowerCase()}:${hash}`,
     dockerfile: data.toString(),
   }
 }
