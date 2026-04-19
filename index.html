@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cook — A simple CLI for orchestrating Claude Code, Codex, and OpenCode</title>
+  <title>cook — A simple CLI for orchestrating Claude Code, Codex, OpenCode, and Pi</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -522,7 +522,7 @@
       <div class="sprite-row">~*~ ~*~ ~*~</div>
       <h1><span class="cook">cook</span><span class="period">.</span></h1>
       <p class="tagline">
-        A simple CLI for orchestrating <br>Claude Code, Codex, and OpenCode.
+        A simple CLI for orchestrating <br>Claude Code, Codex, OpenCode, and Pi.
       </p>
       <pre><code><span class="comment"># review loop</span>
 cook <span class="str">"Implement dark mode"</span> review
@@ -630,6 +630,11 @@ cook <span class="str">"Add dark mode"</span> \
 
       <pre><code>cook <span class="str">"Add dark mode"</span> review \
   --work-agent codex --work-model gpt-5-codex \
+  --review-agent claude --review-model opus
+
+<span class="comment"># use pi as the work agent (requires --sandbox docker)</span>
+cook <span class="str">"Add dark mode"</span> review \
+  --work-agent pi --work-model sonnet \
   --review-agent claude --review-model opus</code></pre>
 
       <h3>ralph</h3>
@@ -749,7 +754,7 @@ cook <span class="str">"Build with React"</span> review <span class="str">"Check
       </table>
 
       <blockquote>
-        <p><strong>Note:</strong> OpenCode is only supported in Docker mode.</p>
+        <p><strong>Note:</strong> OpenCode and Pi are only supported in Docker mode.</p>
       </blockquote>
 
       <h3>Docker Network</h3>

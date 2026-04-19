@@ -12,8 +12,8 @@ import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
 
 const BASE_DOCKERFILE = `FROM node:22-slim
-RUN npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai
-RUN apt-get update && apt-get install -y git iptables && rm -rf /var/lib/apt/lists/*
+RUN npm install -g @anthropic-ai/claude-code @openai/codex opencode-ai @mariozechner/pi-coding-agent
+RUN apt-get update && apt-get install -y git iptables fd-find && ln -s $(which fdfind) /usr/local/bin/fd && rm -rf /var/lib/apt/lists/*
 `
 
 const BASE_IMAGE_NAME = 'cook-sandbox'
@@ -167,6 +167,7 @@ async function copyAuthFiles(container: Docker.Container, userSpec: string): Pro
   await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.codex'])
   await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.config/opencode'])
   await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.local/share/opencode'])
+  await containerExec(container, 'root', ['mkdir', '-p', '/home/cook/.pi/agent'])
 
   const home = os.homedir()
   await copyFileToContainer(container, path.join(home, '.claude.json'), '/home/cook/.claude.json')
@@ -175,6 +176,9 @@ async function copyAuthFiles(container: Docker.Container, userSpec: string): Pro
   await copyFileToContainer(container, path.join(home, '.codex', 'config.toml'), '/home/cook/.codex/config.toml')
   await copyFileToContainer(container, path.join(home, '.config', 'opencode', 'opencode.json'), '/home/cook/.config/opencode/opencode.json')
   await copyFileToContainer(container, path.join(home, '.local', 'share', 'opencode', 'auth.json'), '/home/cook/.local/share/opencode/auth.json')
+  await copyFileToContainer(container, path.join(home, '.pi', 'agent', 'auth.json'), '/home/cook/.pi/agent/auth.json')
+  await copyFileToContainer(container, path.join(home, '.pi', 'agent', 'models.json'), '/home/cook/.pi/agent/models.json')
+  await copyFileToContainer(container, path.join(home, '.pi', 'agent', 'settings.json'), '/home/cook/.pi/agent/settings.json')
 
   await containerExec(container, 'root', ['chown', '-R', userSpec, '/home/cook'])
 }
@@ -203,6 +207,15 @@ function hasOpencodeContainerCredentials(env: string[]): boolean {
   return false
 }
 
+function hasPiContainerCredentials(env: string[]): boolean {
+  const home = os.homedir()
+  if (fs.existsSync(path.join(home, '.pi', 'agent', 'auth.json'))) return true
+  for (const name of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY']) {
+    if (process.env[name] && env.includes(name)) return true
+  }
+  return false
+}
+
 function gitConfig(key: string, fallback: string): string {
   try {
     const out = execSync(`git config ${key}`, { encoding: 'utf8' }).trim()
@@ -221,6 +234,15 @@ function requiredHostsForAgent(agent: AgentName): string[] {
     case 'opencode':
       // opencode can route to multiple providers depending on user config.
       return ['api.openai.com', 'api.anthropic.com', 'api.opencode.ai']
+    case 'pi':
+      // pi supports many providers; allow the most common API hosts.
+      // cloudcode-pa.googleapis.com + accounts.google.com are required for Gemini CLI OAuth.
+      // github.com + raw.githubusercontent.com are required for Pi's update check and schema fetches.
+      return [
+        'api.anthropic.com', 'api.openai.com',
+        'generativelanguage.googleapis.com', 'cloudcode-pa.googleapis.com', 'accounts.google.com',
+        'github.com', 'api.github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com',
+      ]
   }
 }
 
@@ -259,6 +281,8 @@ function runCommandForAgent(agent: AgentName, promptFile: string): string {
       return `codex exec --model "$COOK_MODEL" --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox - < /tmp/${promptFile}`
     case 'opencode':
       return `opencode run -m "$COOK_MODEL" "$(cat /tmp/${promptFile})"`
+    case 'pi':
+      return `pi --model "$COOK_MODEL" -p < /tmp/${promptFile}`
   }
 }
 
@@ -439,6 +463,9 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
   }
   if (agents.includes('opencode') && !hasOpencodeContainerCredentials(env)) {
     logWarn('OpenCode selected but no container-usable credentials found. Add ~/.local/share/opencode/auth.json or set OPENAI_API_KEY/ANTHROPIC_API_KEY and include it in .cook.config.json env passthrough.')
+  }
+  if (agents.includes('pi') && !hasPiContainerCredentials(env)) {
+    logWarn('Pi selected but no container-usable credentials found. Add ~/.pi/agent/auth.json or set ANTHROPIC_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY and include it in .cook/config.json env passthrough.')
   }
 
   const projImage = getProjectImageTag(projectRoot)

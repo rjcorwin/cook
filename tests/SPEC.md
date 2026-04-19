@@ -247,6 +247,23 @@ cook "Add a confirmation dialog before deleting tasks" review \
 
 **Check:** `cook doctor` before this to confirm both agents available if mixing.
 
+### Pi agent
+
+```sh
+cook "Add a tooltip showing task creation date" --agent pi --sandbox docker
+```
+
+**Check:** Status bar shows `pi:sonnet` as the agent. Work completes using pi CLI. Feature present in `index.html`.
+
+Pi with review (mixed agents):
+
+```sh
+cook "Add inline task editing (click to edit)" review \
+     --work-agent pi --review-agent claude --sandbox docker
+```
+
+**Check:** Work step uses `pi:sonnet`, review and gate use `claude:opus`. `cook doctor --work-agent pi --review-agent claude` should pass auth checks for both agents before running.
+
 ### --hide-request
 
 ```sh
