@@ -6,8 +6,9 @@ import { execSync, spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import type { AgentName, DockerConfig } from './config.js'
+import type { AgentArgs, AgentName, DockerConfig } from './config.js'
 import type { AgentRunner } from './runner.js'
+import { resolveAgentArgs } from './util.js'
 import { logStep, logOK, logWarn } from './log.js'
 import { LineBuffer } from './line-buffer.js'
 
@@ -251,14 +252,23 @@ for ip in $ALLOWED_IPS; do
 done`
 }
 
-function runCommandForAgent(agent: AgentName, promptFile: string): string {
+/**
+ * POSIX single-quote escape for safe interpolation into a `sh -c '<cmd>'`
+ * shell string. Closes the quote, emits an escaped literal quote, reopens.
+ */
+function shellQuote(arg: string): string {
+  return `'${arg.replace(/'/g, `'\\''`)}'`
+}
+
+function runCommandForAgent(agent: AgentName, promptFile: string, extra: string[] = []): string {
+  const tail = extra.length > 0 ? ' ' + extra.map(shellQuote).join(' ') : ''
   switch (agent) {
     case 'claude':
-      return `claude --model "$COOK_MODEL" --dangerously-skip-permissions -p < /tmp/${promptFile}`
+      return `claude --model "$COOK_MODEL" --dangerously-skip-permissions${tail} -p < /tmp/${promptFile}`
     case 'codex':
-      return `codex exec --model "$COOK_MODEL" --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox - < /tmp/${promptFile}`
+      return `codex exec --model "$COOK_MODEL" --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox${tail} - < /tmp/${promptFile}`
     case 'opencode':
-      return `opencode run -m "$COOK_MODEL" "$(cat /tmp/${promptFile})"`
+      return `opencode run -m "$COOK_MODEL"${tail} "$(cat /tmp/${promptFile})"`
   }
 }
 
@@ -271,6 +281,7 @@ async function runAgent(
   userSpec: string,
   env: string[],
   workingDir: string,
+  agentArgs: AgentArgs,
   onLine: (line: string) => void,
 ): Promise<string> {
   // Write prompt to a temp file to avoid ARG_MAX limits on large prompts
@@ -279,7 +290,8 @@ async function runAgent(
   const promptTar = createTarWithFile(promptFile, promptBuf)
   await container.putArchive(promptTar as NodeJS.ReadableStream, { path: '/tmp' })
   await containerExec(container, 'root', ['chown', userSpec, `/tmp/${promptFile}`])
-  const agentCommand = runCommandForAgent(agent, promptFile)
+  const extra = resolveAgentArgs(agent, agentArgs[agent])
+  const agentCommand = runCommandForAgent(agent, promptFile, extra)
 
   const exec = await container.exec({
     Cmd: ['sh', '-c', `${agentCommand}; rc=$?; rm -f /tmp/${promptFile}; exit $rc`],
@@ -347,13 +359,14 @@ export class Sandbox implements AgentRunner {
     private userSpec: string,
     private env: string[],
     private projectRoot: string,
+    private agentArgs: AgentArgs = {},
   ) {}
 
   async runAgent(agent: AgentName, model: string, prompt: string, onLine: (line: string) => void): Promise<string> {
     if (this.aborted) {
       throw new Error('Runner was stopped (cancelled)')
     }
-    return runAgent(this.container, this.docker, agent, model, prompt, this.userSpec, this.env, this.projectRoot, onLine)
+    return runAgent(this.container, this.docker, agent, model, prompt, this.userSpec, this.env, this.projectRoot, this.agentArgs, onLine)
   }
 
   /**
@@ -417,7 +430,7 @@ export class Sandbox implements AgentRunner {
   }
 }
 
-export async function startSandbox(docker: Docker, projectRoot: string, env: string[], dockerConfig: DockerConfig, agents: AgentName[], verbose = false): Promise<Sandbox> {
+export async function startSandbox(docker: Docker, projectRoot: string, env: string[], dockerConfig: DockerConfig, agents: AgentName[], verbose = false, agentArgs: AgentArgs = {}): Promise<Sandbox> {
   try {
     await docker.ping()
   } catch {
@@ -504,7 +517,7 @@ export async function startSandbox(docker: Docker, projectRoot: string, env: str
 
   logOK(`Sandbox started (container: ${containerName})`)
 
-  return new Sandbox(docker, container, userSpec, containerEnv, projectRoot)
+  return new Sandbox(docker, container, userSpec, containerEnv, projectRoot, agentArgs)
 }
 
 export { BASE_IMAGE_NAME, BASE_DOCKERFILE, buildImage }

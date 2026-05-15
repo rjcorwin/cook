@@ -14,6 +14,8 @@ export interface StepAgentConfig {
   sandbox?: SandboxMode
 }
 
+export type AgentArgs = Partial<Record<AgentName, string[]>>
+
 export interface CookConfig {
   sandbox: SandboxMode
   env: string[]
@@ -22,6 +24,7 @@ export interface CookConfig {
   model?: string
   steps: Record<StepName, StepAgentConfig>
   retry: RetryConfig
+  agentArgs: AgentArgs
 }
 
 export interface StepSelection {
@@ -49,6 +52,19 @@ function isSandboxMode(value: unknown): value is SandboxMode {
   return value === 'agent' || value === 'docker'
 }
 
+function parseAgentArgs(value: unknown): AgentArgs {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const result: AgentArgs = {}
+  for (const key of Object.keys(value as object)) {
+    if (!isAgentName(key)) continue
+    const list = (value as Record<string, unknown>)[key]
+    if (!Array.isArray(list)) continue
+    const flags = list.filter((v): v is string => typeof v === 'string')
+    if (flags.length > 0) result[key] = flags
+  }
+  return result
+}
+
 function parseStepAgentConfig(value: unknown): StepAgentConfig {
   if (!value || typeof value !== 'object') return {}
   const step = value as { agent?: unknown, model?: unknown, sandbox?: unknown }
@@ -73,6 +89,7 @@ export function loadConfig(projectRoot: string): CookConfig {
     agent: 'claude',
     steps: { work: {}, review: {}, gate: {}, iterate: {}, ralph: {} },
     retry: { ...DEFAULT_RETRY_CONFIG },
+    agentArgs: {},
   }
 
   const configPath = resolveConfigPath(projectRoot)
@@ -115,7 +132,8 @@ export function loadConfig(projectRoot: string): CookConfig {
         retry.maxWaitMs = parsed.retry.maxWaitMinutes * 60 * 1000
       }
     }
-    return { sandbox, env, animation, agent, model, steps, retry }
+    const agentArgs = parseAgentArgs(parsed.agentArgs)
+    return { sandbox, env, animation, agent, model, steps, retry, agentArgs }
   } catch (err) {
     logWarn(`Malformed .cook/config.json: ${err}`)
     return defaults
