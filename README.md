@@ -139,3 +139,31 @@ Creates `COOK.md` (project instructions + prompt template) and `.cook/config.jso
   "env": ["CLAUDE_CODE_OAUTH_TOKEN"]
 }
 ```
+
+### Custom agent CLI flags
+
+Pass extra flags to the agent CLI on every step via `agentArgs` in `.cook/config.json`:
+
+```json
+{
+  "agent": "claude",
+  "agentArgs": {
+    "claude": ["--mcp-config", ".cook/mcp.json", "--add-dir", "../shared"],
+    "codex":  ["--profile", "fast"]
+  }
+}
+```
+
+Flags are appended to every invocation (work, review, gate, iterate, ralph, race, judge). Common use-cases:
+
+- **`--mcp-config <path>`** — load extra Model Context Protocol servers (Figma, Jira, internal tools).
+- **`--add-dir <path>`** — grant Claude access to a sibling directory (e.g. a shared file bus).
+- **`--permission-mode <mode>`** — override the runner default (last flag wins).
+
+For one-off overrides without editing config, use the env-var form (space-separated, shell-style quoting):
+
+```sh
+COOK_AGENT_ARGS_CLAUDE="--add-dir /tmp/bus" cook "fix the bug" review
+```
+
+**Docker sandbox caveat:** any path you pass via `agentArgs` must be reachable from inside the container. The project root is bind-mounted automatically; paths outside it need `network.allowedHosts` (for URLs) or a custom Dockerfile bind-mount.

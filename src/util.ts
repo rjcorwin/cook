@@ -1,6 +1,7 @@
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import type { AgentName } from './config.js'
 
 function stripSurroundingQuotes(value: string): string {
   return value.length >= 2 && value.startsWith('"') && value.endsWith('"')
@@ -73,4 +74,58 @@ export function findProjectRoot(): string {
   } catch {
     return process.cwd()
   }
+}
+
+/**
+ * Split a shell-style argument string into argv tokens.
+ *
+ * Supports POSIX-style single quotes (literal), double quotes (with backslash
+ * escapes), and bare tokens. Used for the `COOK_AGENT_ARGS_<AGENT>` env-var
+ * fallback so users can pass quoted flags through the shell environment.
+ */
+export function splitShellArgs(input: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let inSingle = false
+  let inDouble = false
+  let i = 0
+  const push = () => { if (cur.length > 0) { out.push(cur); cur = '' } }
+  while (i < input.length) {
+    const ch = input[i]!
+    if (inSingle) {
+      if (ch === "'") inSingle = false
+      else cur += ch
+    } else if (inDouble) {
+      if (ch === '"') inDouble = false
+      else if (ch === '\\' && i + 1 < input.length) { cur += input[i + 1]; i++ }
+      else cur += ch
+    } else if (ch === "'") {
+      inSingle = true
+    } else if (ch === '"') {
+      inDouble = true
+    } else if (ch === '\\' && i + 1 < input.length) {
+      cur += input[i + 1]; i++
+    } else if (ch === ' ' || ch === '\t' || ch === '\n') {
+      push()
+    } else {
+      cur += ch
+    }
+    i++
+  }
+  push()
+  return out
+}
+
+/**
+ * Resolve the extra CLI flags to pass to an agent. The env-var
+ * `COOK_AGENT_ARGS_<AGENT>` (uppercase) takes precedence over the
+ * config value so users can override per-run without editing config.
+ */
+export function resolveAgentArgs(agent: AgentName, configArgs: string[] | undefined): string[] {
+  const envKey = `COOK_AGENT_ARGS_${agent.toUpperCase()}`
+  const raw = process.env[envKey]
+  if (raw && raw.trim().length > 0) {
+    return splitShellArgs(raw)
+  }
+  return configArgs ?? []
 }

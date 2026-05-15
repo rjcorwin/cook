@@ -113,6 +113,7 @@ export async function cmdShell(args: string[]): Promise<void> {
     dockerConfig,
     [config.agent],
     true, // verbose
+    config.agentArgs,
   )
 
   // 8. Print network notice if restricted

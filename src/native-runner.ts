@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from 'child_process'
-import type { AgentName } from './config.js'
+import type { AgentArgs, AgentName } from './config.js'
 import type { AgentRunner } from './runner.js'
 import { LineBuffer } from './line-buffer.js'
+import { resolveAgentArgs } from './util.js'
 
 export class NativeRunner implements AgentRunner {
   private child: ChildProcess | null = null
@@ -10,6 +11,7 @@ export class NativeRunner implements AgentRunner {
   constructor(
     private projectRoot: string,
     private env: string[],
+    private agentArgs: AgentArgs = {},
   ) {}
 
   protected getBypassFlags(_agent: AgentName): string[] {
@@ -110,16 +112,17 @@ export class NativeRunner implements AgentRunner {
 
   private buildCommand(agent: AgentName, model: string): { cmd: string; args: string[] } {
     const bypassFlags = this.getBypassFlags(agent)
+    const extra = resolveAgentArgs(agent, this.agentArgs[agent])
     switch (agent) {
       case 'claude':
         return {
           cmd: 'claude',
-          args: ['--model', model, '--permission-mode', 'acceptEdits', '-p', ...bypassFlags],
+          args: ['--model', model, '--permission-mode', 'acceptEdits', '-p', ...bypassFlags, ...extra],
         }
       case 'codex':
         return {
           cmd: 'codex',
-          args: ['exec', '--model', model, '--full-auto', '--skip-git-repo-check', ...bypassFlags, '-'],
+          args: ['exec', '--model', model, '--full-auto', '--skip-git-repo-check', ...bypassFlags, ...extra, '-'],
         }
       default:
         throw new Error(`Unsupported agent for native runner: ${agent}`)

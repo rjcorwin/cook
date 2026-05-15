@@ -61,12 +61,12 @@ export function createRunnerPool(worktreePath: string, config: CookConfig, runAg
   return new RunnerPool(async (mode: SandboxMode) => {
     switch (mode) {
       case 'agent':
-        return new NativeRunner(worktreePath, config.env)
+        return new NativeRunner(worktreePath, config.env, config.agentArgs)
       case 'docker': {
         const Docker = (await import('dockerode')).default
         const { startSandbox } = await import('./sandbox.js')
         const dockerConfig = loadDockerConfig(worktreePath)
-        return startSandbox(new Docker(), worktreePath, config.env, dockerConfig, runAgents)
+        return startSandbox(new Docker(), worktreePath, config.env, dockerConfig, runAgents, false, config.agentArgs)
       }
     }
   })
